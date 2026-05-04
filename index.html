@@ -1,0 +1,2831 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kajplaneraren</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --panel-2: #f8fafc;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text: #0f172a;
+    --text-dim: #64748b;
+    --text-faint: #94a3b8;
+    --accent: #0066ff;
+    --accent-soft: #dbeafe;
+    --danger: #e11d48;
+    --danger-soft: #fee2e2;
+    --warn: #f59e0b;
+    --warn-soft: #fef3c7;
+    --ok: #10b981;
+    --water-1: #d9e8f5;
+    --water-2: #b6d1e8;
+    --kaj-1: #7a5f3e;
+    --kaj-2: #8b6f47;
+    --kaj-edge: #5a4a35;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.06);
+    --shadow: 0 2px 8px rgba(15,23,42,.08);
+    --shadow-lg: 0 8px 32px rgba(15,23,42,.18);
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  /* ========= Layout ========= */
+  #app {
+    display: grid;
+    grid-template-columns: 240px 1fr 290px;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-areas:
+      "topbar topbar topbar"
+      "left main right"
+      "bottom bottom bottom";
+    height: 100vh;
+  }
+  #topbar {
+    grid-area: topbar;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 10px;
+    box-shadow: var(--shadow-sm);
+    z-index: 30;
+  }
+  #topbar .brand {
+    font-weight: 600; letter-spacing: -.01em; margin-right: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #topbar .brand .logo {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: linear-gradient(135deg, #0066ff, #00aaff);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px;
+  }
+  #topbar .tsep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  #topbar button, #topbar label.filebtn {
+    background: transparent; border: 1px solid transparent;
+    padding: 6px 10px; border-radius: 5px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; color: var(--text);
+  }
+  #topbar button:hover, #topbar label.filebtn:hover { background: var(--panel-2); border-color: var(--border); }
+  #topbar button.primary { background: var(--accent); color: #fff; }
+  #topbar button.primary:hover { background: #0052cc; border-color: #0052cc; }
+  #topbar .search-btn {
+    margin-left: auto;
+    min-width: 180px; justify-content: space-between;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text-dim);
+  }
+  #topbar .search-btn kbd {
+    font-size: 10px; padding: 1px 5px; border: 1px solid var(--border);
+    border-radius: 3px; background: var(--panel); color: var(--text-dim);
+  }
+  #topbar .season {
+    border: 1px solid var(--border); background: var(--panel-2);
+    padding: 4px 8px; border-radius: 5px;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: var(--text-dim);
+  }
+  #topbar .season select {
+    border: none; background: transparent; font-weight: 600; color: var(--text);
+    outline: none;
+  }
+
+  /* ========= Side panels ========= */
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto; overflow-x: hidden;
+  }
+  #left-panel { grid-area: left; }
+  #right-panel { grid-area: right; border-right: none; border-left: 1px solid var(--border); }
+  .panel-section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-section h3 {
+    margin: 0 0 8px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-faint); font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-section h3 .icon-btn {
+    background: transparent; border: none; cursor: pointer; padding: 2px 4px;
+    color: var(--text-dim); border-radius: 3px; font-size: 13px;
+  }
+  .panel-section h3 .icon-btn:hover { background: var(--panel-2); color: var(--text); }
+
+  /* ========= Stats panel ========= */
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 3px 0; font-size: 12.5px;
+  }
+  .stat-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .util-bar {
+    height: 8px; background: var(--panel-2); border-radius: 4px;
+    overflow: hidden; margin: 6px 0 4px;
+  }
+  .util-bar .fill {
+    height: 100%; background: linear-gradient(90deg, #10b981, #22c55e);
+    transition: width .3s;
+  }
+  .util-bar .fill.high { background: linear-gradient(90deg, #f59e0b, #f97316); }
+  .util-bar .fill.full { background: linear-gradient(90deg, #e11d48, #dc2626); }
+
+  /* ========= Lists ========= */
+  .list-item {
+    padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    margin: 1px 0; font-size: 12.5px;
+  }
+  .list-item:hover { background: var(--panel-2); }
+  .list-item.sel { background: var(--accent-soft); color: #1e40af; }
+  .list-item .swatch {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,.15);
+  }
+  .list-item .muted { color: var(--text-faint); margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .list-item .warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
+
+  /* ========= Inspector ========= */
+  #inspector label {
+    display: block; font-size: 11px; color: var(--text-dim);
+    margin: 8px 0 3px; font-weight: 500;
+  }
+  #inspector input[type=text], #inspector input[type=number],
+  #inspector textarea, #inspector select {
+    width: 100%; padding: 5px 7px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--panel); font-size: 12.5px;
+    outline: none;
+  }
+  #inspector input:focus, #inspector textarea:focus, #inspector select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  #inspector input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  #inspector .row { display: flex; gap: 6px; }
+  #inspector .row > * { flex: 1; }
+  #inspector .rot-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 4px; }
+  #inspector .rot-btns button {
+    padding: 4px; border: 1px solid var(--border); background: var(--panel);
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  #inspector .rot-btns button:hover { background: var(--panel-2); }
+  #inspector .actions { display: flex; gap: 6px; margin-top: 10px; }
+  #inspector .actions button {
+    flex: 1; padding: 6px; border: 1px solid var(--border);
+    background: var(--panel); border-radius: 4px; cursor: pointer;
+    font-size: 12px;
+  }
+  #inspector .actions button:hover { background: var(--panel-2); }
+  #inspector .actions button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  #inspector .actions button.danger:hover { background: #be123c; }
+  #inspector .tabs { display: flex; border-bottom: 1px solid var(--border); margin: 0 -14px 10px; padding: 0 14px; }
+  #inspector .tabs .tab {
+    padding: 7px 10px; font-size: 12px; font-weight: 500;
+    color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  #inspector .tabs .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  #fact-card .fact-year {
+    display: inline-block; padding: 2px 7px;
+    border: 1px solid var(--border); border-radius: 9px;
+    font-size: 11px; margin-right: 4px;
+    background: var(--panel-2); color: var(--text-dim);
+  }
+  #fact-card .kmark {
+    display: inline-block; padding: 2px 7px;
+    background: #fef3c7; color: #854d0e; border-radius: 9px;
+    font-size: 11px; font-weight: 600;
+  }
+  #fact-card .story {
+    font-size: 12.5px; line-height: 1.5; color: var(--text);
+    padding: 8px 10px; background: var(--panel-2); border-radius: 5px;
+    margin-top: 8px;
+  }
+  #fact-card .sources { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+  #fact-card .sources a { color: var(--accent); text-decoration: none; }
+  #fact-card .sources a:hover { text-decoration: underline; }
+  #fact-card .nodata {
+    font-size: 12px; color: var(--text-faint); font-style: italic;
+    padding: 10px; text-align: center;
+  }
+
+  /* ========= Canvas ========= */
+  #canvas-wrap {
+    grid-area: main;
+    overflow: auto;
+    position: relative;
+    background:
+      radial-gradient(ellipse at 50% 30%, #e8f0f7 0%, #d9e8f5 60%, #c5dae9 100%);
+  }
+  #canvas {
+    position: relative;
+    transform-origin: 0 0;
+    background-image:
+      linear-gradient(to right, rgba(15,23,42,.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,23,42,.05) 1px, transparent 1px);
+  }
+  #bg-image {
+    position: absolute; top: 0; left: 0; pointer-events: none;
+    filter: saturate(.85);
+  }
+  #kaj {
+    position: absolute;
+    background:
+      repeating-linear-gradient(90deg,
+        var(--kaj-1) 0px, var(--kaj-1) 18px,
+        var(--kaj-2) 18px, var(--kaj-2) 20px),
+      linear-gradient(180deg, rgba(255,255,255,.1), rgba(0,0,0,.05) 70%);
+    border: 1px solid var(--kaj-edge);
+    box-shadow: inset 0 2px 4px rgba(255,255,255,.15), 0 2px 6px rgba(0,0,0,.12);
+  }
+  #kaj .kaj-edge-top {
+    position: absolute; top: -1px; left: 0; right: 0; height: 2px;
+    background: #2a3a4a;
+  }
+
+  /* Place markers */
+  .place {
+    position: absolute;
+    border-top: 2px dashed rgba(255,255,255,.35);
+    pointer-events: none;
+    display: flex; align-items: flex-start; justify-content: center;
+    font-size: 9px; color: rgba(255,255,255,.85);
+    padding-top: 1px; font-weight: 600;
+    text-shadow: 0 0 2px rgba(0,0,0,.4);
+  }
+  .place::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 1px; background: rgba(255,255,255,.25);
+  }
+  .place.reserved { background: rgba(255, 180, 0, .12); }
+  .place.free::after {
+    content: ""; position: absolute; left: 2px; top: 4px; width: 6px; height: 6px;
+    border-radius: 50%; background: #10b981;
+  }
+
+  /* Fire lane */
+  .fire-lane {
+    position: absolute; pointer-events: none;
+    background: repeating-linear-gradient(135deg,
+      rgba(220, 38, 38, .32) 0, rgba(220, 38, 38, .32) 6px,
+      rgba(220, 38, 38, .55) 6px, rgba(220, 38, 38, .55) 12px);
+    border-left: 2px solid #dc2626; border-right: 2px solid #dc2626;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 9px; font-weight: 700;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    text-transform: uppercase; letter-spacing: .08em;
+    text-shadow: 0 0 3px rgba(0,0,0,.6);
+  }
+
+  /* Boats */
+  .boat {
+    position: absolute;
+    border: 1.5px solid rgba(30,41,59,.85);
+    border-radius: 10% 42% 42% 10% / 15% 50% 50% 15%;
+    cursor: move;
+    display: flex; align-items: center; justify-content: center;
+    color: #0f172a; font-size: 10px; font-weight: 600;
+    user-select: none;
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,.35),
+      inset 0 -2px 4px rgba(0,0,0,.18),
+      0 1px 3px rgba(0,0,0,.35);
+    transform-origin: 50% 50%;
+    transition: box-shadow .12s, filter .12s;
+  }
+  .boat:hover { filter: brightness(1.05); }
+  .boat .label {
+    white-space: nowrap;
+    text-shadow: 0 0 3px rgba(255,255,255,.85), 0 0 3px rgba(255,255,255,.85), 0 0 3px rgba(255,255,255,.85);
+    pointer-events: none;
+    padding: 0 4px;
+  }
+  .boat.selected {
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,.35),
+      inset 0 -2px 4px rgba(0,0,0,.18),
+      0 0 0 2px var(--accent),
+      0 0 0 4px var(--accent-soft),
+      0 1px 3px rgba(0,0,0,.35);
+  }
+  .boat.colliding {
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,.35),
+      inset 0 -2px 4px rgba(0,0,0,.18),
+      0 0 0 2px #e11d48,
+      0 0 12px rgba(225,29,72,.35);
+  }
+  .boat.colliding.selected {
+    box-shadow:
+      inset 0 1px 2px rgba(255,255,255,.35),
+      inset 0 -2px 4px rgba(0,0,0,.18),
+      0 0 0 2px #e11d48,
+      0 0 0 4px rgba(225,29,72,.25),
+      0 0 12px rgba(225,29,72,.35);
+  }
+  .boat .rot-handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--accent); border: 2px solid #fff; border-radius: 50%;
+    top: -22px; left: 50%; margin-left: -7px;
+    cursor: grab; display: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  }
+  .boat.selected .rot-handle { display: block; }
+  .boat .k-mark {
+    position: absolute; top: -4px; right: -4px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #f59e0b; color: #fff; font-size: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; pointer-events: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+  .boat:not(.selected) .k-mark { display: none; }
+
+  /* Bg handles */
+  .bg-handle {
+    position: absolute; width: 12px; height: 12px;
+    background: var(--accent); border: 2px solid #fff;
+    border-radius: 50%; cursor: nwse-resize; z-index: 5;
+    box-shadow: 0 1px 3px rgba(0,0,0,.3); pointer-events: auto;
+    display: none;
+  }
+  .bg-handle.visible { display: block; }
+  .bg-handle.br { cursor: nwse-resize; }
+  .bg-handle.move { cursor: move; border-radius: 4px; }
+
+  /* Rubber-band selection */
+  #rubber {
+    position: absolute; border: 1.5px dashed var(--accent);
+    background: rgba(0,102,255,0.10); pointer-events: none; display: none;
+    border-radius: 2px;
+  }
+
+  /* Bottom bar */
+  #bottom-bar {
+    grid-area: bottom;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 12px; font-size: 11.5px;
+    color: var(--text-dim);
+  }
+  #bottom-bar .sep { width: 1px; height: 16px; background: var(--border); }
+  #bottom-bar .coord { font-variant-numeric: tabular-nums; }
+  #bottom-bar label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  #bottom-bar .scalebar {
+    margin-left: auto;
+    display: inline-flex; flex-direction: column; align-items: center;
+    padding: 0 8px; color: var(--text);
+  }
+  #bottom-bar .scalebar .bar {
+    height: 6px; border: 1px solid var(--text); border-top: none;
+    background: linear-gradient(to right, var(--text) 50%, transparent 50%);
+  }
+  #bottom-bar .zoom {
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  #bottom-bar .zoom button {
+    background: transparent; border: 1px solid var(--border); width: 22px; height: 20px;
+    border-radius: 3px; cursor: pointer; line-height: 1;
+  }
+  #bottom-bar .zoom button:hover { background: var(--panel-2); }
+  #bottom-bar .zoom input[type=range] { width: 100px; }
+
+  /* Multi-select bar */
+  #multi-bar {
+    position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 8px 12px; border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    display: none; z-index: 60; gap: 8px; align-items: center;
+    font-size: 12.5px;
+  }
+  #multi-bar.on { display: flex; }
+  #multi-bar button {
+    background: #334155; color: #fff; border: none;
+    padding: 5px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 12px;
+  }
+  #multi-bar button:hover { background: #475569; }
+  #multi-bar button.danger { background: var(--danger); }
+  #multi-bar button.danger:hover { background: #be123c; }
+  #multi-bar .sum { opacity: .8; font-variant-numeric: tabular-nums; }
+
+  /* Drag tooltip */
+  #drag-info {
+    position: fixed; pointer-events: none; z-index: 300;
+    background: rgba(15,23,42,.92); color: #fff; font-size: 11.5px;
+    padding: 4px 8px; border-radius: 4px; display: none;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  #drag-info.on { display: block; }
+
+  /* Dialogs */
+  dialog {
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 18px 20px; font-family: inherit;
+    box-shadow: var(--shadow-lg); min-width: 280px;
+  }
+  dialog::backdrop { background: rgba(15,23,42,.35); backdrop-filter: blur(2px); }
+  dialog h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+  dialog label { display: block; margin: 8px 0 2px; font-size: 12px; color: var(--text-dim); }
+  dialog input[type=text], dialog input[type=number], dialog input[type=email] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 13px; outline: none;
+  }
+  dialog input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  dialog .row { display: flex; gap: 8px; }
+  dialog .row > * { flex: 1; }
+  dialog .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
+  dialog button {
+    padding: 6px 14px; border: 1px solid var(--border); background: var(--panel);
+    border-radius: 4px; cursor: pointer; font-size: 13px;
+  }
+  dialog button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  dialog button.primary:hover { background: #0052cc; }
+  dialog button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  /* Calibration banner */
+  #calib-banner {
+    position: fixed; top: 55px; left: 50%; transform: translateX(-50%);
+    background: var(--warn-soft); color: #854d0e;
+    padding: 10px 18px; border-radius: 8px; border: 1px solid #f59e0b;
+    box-shadow: var(--shadow);
+    z-index: 200; display: none;
+    font-weight: 500; font-size: 13px;
+  }
+  #calib-banner.on { display: block; }
+  #calib-dot {
+    position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    background: #ef4444; border: 2px solid #fff; border-radius: 50%;
+    pointer-events: none; box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+
+  /* Cmd+K palette */
+  #cmdk {
+    position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
+    width: 520px; max-width: 92vw; max-height: 70vh;
+    background: var(--panel); border-radius: 10px;
+    box-shadow: var(--shadow-lg); z-index: 500;
+    display: none; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  #cmdk.on { display: flex; }
+  #cmdk-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,42,.25);
+    z-index: 499; display: none;
+  }
+  #cmdk-backdrop.on { display: block; }
+  #cmdk input {
+    border: none; padding: 14px 16px; font-size: 15px; outline: none; background: transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  #cmdk-list { overflow-y: auto; padding: 4px 0; max-height: 60vh; }
+  #cmdk-list .item {
+    padding: 8px 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px;
+  }
+  #cmdk-list .item.sel { background: var(--accent-soft); }
+  #cmdk-list .item .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.15); }
+  #cmdk-list .item .meta { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+  #cmdk-list .group-header {
+    padding: 6px 14px 2px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--text-faint); font-weight: 600;
+  }
+  #cmdk-list .empty { padding: 30px 14px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 8px 14px; border-radius: 6px;
+    font-size: 12.5px; z-index: 500;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    box-shadow: var(--shadow-lg);
+  }
+  #toast.on { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+  /* Places dialog table */
+  .table-like { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .table-like th {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+    font-weight: 600; color: var(--text-dim); font-size: 11px;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  .table-like td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .table-like tr:last-child td { border-bottom: none; }
+  .table-like input[type=text], .table-like input[type=number] {
+    width: 100%; border: 1px solid transparent; padding: 3px 5px;
+    border-radius: 3px; font-size: 12px; background: transparent;
+  }
+  .table-like input:focus { border-color: var(--accent); background: var(--panel); }
+  .table-like .del-btn {
+    background: transparent; border: none; color: var(--text-faint);
+    cursor: pointer; padding: 2px 6px; border-radius: 3px;
+  }
+  .table-like .del-btn:hover { color: var(--danger); background: var(--danger-soft); }
+
+  /* Scrollbars */
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: content-box; border: 2px solid transparent; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ================= TOP BAR ================= -->
+  <div id="topbar">
+    <div class="brand">
+      <div class="logo">⚓</div>
+      <span>Kajplaneraren</span>
+    </div>
+    <label class="filebtn">📂 Öppna CSV<input type="file" id="csv-input" accept=".csv,text/csv" hidden></label>
+    <label class="filebtn">📊 Öppna Excel<input type="file" id="xlsx-input" accept=".xlsx" hidden></label>
+    <div class="tsep"></div>
+    <button id="export-xlsx" title="Exportera till Excel med flera blad">💾 Exportera Excel</button>
+    <button id="export-pdf" title="Exportera som A3-PDF">🖨 A3-PDF</button>
+    <button id="export-png">🖼 PNG</button>
+    <button id="share-link" title="Kopiera delningslänk">🔗 Dela</button>
+    <div class="tsep"></div>
+    <button id="add-boat">＋ Båt</button>
+    <button id="manage-places">Platser</button>
+    <button id="manage-owners">Ägare</button>
+    <button id="manage-fire">Brandgator</button>
+    <div class="tsep"></div>
+    <label class="filebtn">🗺 Bild<input type="file" id="bg-input" accept="image/*" hidden></label>
+    <button id="calibrate" title="Klicka två punkter med känt avstånd">📐 Kalibrera</button>
+    <button id="bg-settings">Bildinst.</button>
+    <div class="tsep"></div>
+    <div class="season">
+      Säsong <select id="season-select"></select>
+      <button class="icon-btn" id="season-new" title="Ny säsong" style="background:transparent;border:none;cursor:pointer;padding:0 4px">＋</button>
+    </div>
+    <button class="search-btn" id="search-btn">
+      <span>🔍 Sök…</span>
+      <kbd>⌘K</kbd>
+    </button>
+  </div>
+
+  <!-- ================= LEFT PANEL ================= -->
+  <aside id="left-panel">
+    <div class="panel-section">
+      <h3>Kajen
+        <button class="icon-btn" id="edit-kaj" title="Redigera kaj">✎</button>
+      </h3>
+      <div class="stat-row"><span>Längd</span><span class="val" id="stat-kaj-len">619 m</span></div>
+      <div class="stat-row"><span>Bredd</span><span class="val" id="stat-kaj-width">10 m</span></div>
+      <div class="stat-row"><span>Båtar</span><span class="val" id="stat-count">0</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Kajutnyttjande</h3>
+      <div class="stat-row"><span>Belagt</span><span class="val" id="stat-used">0 m</span></div>
+      <div class="stat-row"><span>Ledigt</span><span class="val" id="stat-free">619 m</span></div>
+      <div class="util-bar"><div class="fill" id="stat-bar" style="width:0%"></div></div>
+      <div class="stat-row" style="color:var(--text-dim); font-size:11.5px">
+        <span id="stat-util-pct">0 %</span>
+        <span id="stat-gaps">0 luckor</span>
+      </div>
+    </div>
+
+    <div class="panel-section" id="collisions-section" style="display:none">
+      <h3>⚠ Konflikter <span id="collision-count" style="color:var(--danger);font-weight:700"></span></h3>
+      <div id="collision-list"></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Båtar
+        <span id="boat-list-filter-count" style="color:var(--text-faint);font-weight:500"></span>
+      </h3>
+      <input type="text" id="boat-filter" placeholder="Filtrera…" style="width:100%; padding:4px 6px; margin-bottom:6px; border:1px solid var(--border); border-radius:4px; font-size:12px">
+      <div id="boat-list"></div>
+    </div>
+  </aside>
+
+  <!-- ================= CANVAS ================= -->
+  <div id="canvas-wrap">
+    <div id="canvas">
+      <img id="bg-image" style="display:none" alt="">
+      <div id="kaj"><div class="kaj-edge-top"></div></div>
+      <!-- places, fire lanes, boats appended here -->
+      <div id="rubber"></div>
+      <div class="bg-handle move" id="bg-handle-move" title="Dra för att flytta bakgrunden"></div>
+      <div class="bg-handle br" id="bg-handle-br" title="Dra för att skala bakgrunden"></div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT PANEL ================= -->
+  <aside id="right-panel">
+    <div id="inspector-empty" class="panel-section" style="color:var(--text-faint); font-size:12.5px; text-align:center; padding:30px 14px">
+      Ingen båt markerad.<br>
+      <span style="font-size:11px">Klicka en båt, eller ＋ Båt ovan.</span>
+    </div>
+    <div id="inspector" style="display:none">
+      <div class="panel-section" style="padding-bottom:0; padding-top:10px">
+        <div class="tabs">
+          <div class="tab active" data-tab="props">Egenskaper</div>
+          <div class="tab" data-tab="fact">Fakta</div>
+          <div class="tab" data-tab="notes">Noter</div>
+        </div>
+      </div>
+      <div class="panel-section tab-content" data-tab="props">
+        <label>Namn</label>
+        <input type="text" id="insp-name">
+        <div class="row">
+          <div>
+            <label>Längd (m)</label>
+            <input type="number" id="insp-length" min="0.5" step="0.1">
+          </div>
+          <div>
+            <label>Bredd (m)</label>
+            <input type="number" id="insp-width" min="0.5" step="0.1">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Djupgående (m)</label>
+            <input type="number" id="insp-draft" min="0" step="0.1">
+          </div>
+          <div>
+            <label>Rotation (°)</label>
+            <input type="number" id="insp-rot" step="1">
+          </div>
+        </div>
+        <div class="rot-btns">
+          <button id="rot-minus-90">↺ 90°</button>
+          <button id="rot-reset">Räta</button>
+          <button id="rot-plus-90">90° ↻</button>
+        </div>
+        <label>Färg</label>
+        <input type="color" id="insp-color">
+        <label>Plats</label>
+        <select id="insp-place">
+          <option value="">(ingen)</option>
+        </select>
+        <label>Ägare</label>
+        <select id="insp-owner">
+          <option value="">(okänd)</option>
+        </select>
+        <div class="actions">
+          <button id="insp-dup" title="Ctrl+D">Duplicera</button>
+          <button id="insp-delete" class="danger">Radera</button>
+        </div>
+      </div>
+      <div class="panel-section tab-content" data-tab="fact" style="display:none">
+        <div id="fact-card"></div>
+      </div>
+      <div class="panel-section tab-content" data-tab="notes" style="display:none">
+        <label>Byggår</label><input type="number" id="insp-year" min="1700" max="2100">
+        <label>Varv</label><input type="text" id="insp-yard">
+        <label>Material</label>
+        <select id="insp-material">
+          <option value="">—</option>
+          <option value="trä">Trä</option>
+          <option value="mahogny">Mahogny</option>
+          <option value="aluminium">Aluminium</option>
+          <option value="stål">Stål</option>
+          <option value="järn">Järn</option>
+          <option value="glasfiber">Glasfiber</option>
+        </select>
+        <label>Typ</label>
+        <select id="insp-type">
+          <option value="">—</option>
+          <option value="motorbåt">Motorbåt</option>
+          <option value="segelbåt">Segelbåt</option>
+          <option value="ångbåt">Ångbåt</option>
+          <option value="bogserbåt">Bogserbåt</option>
+          <option value="veteranbåt">Veteranbåt</option>
+          <option value="fiskebåt">Fiskebåt</option>
+          <option value="militär">Militär</option>
+        </select>
+        <label><input type="checkbox" id="insp-kmark"> K-märkt</label>
+        <label>Egen anteckning</label>
+        <textarea id="insp-notes" rows="4" style="resize:vertical"></textarea>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= BOTTOM BAR ================= -->
+  <div id="bottom-bar">
+    <span id="mouse-coord" class="coord">—, —</span>
+    <span class="sep"></span>
+    <label><input type="checkbox" id="snap-toggle"> Snap 1 m</label>
+    <label><input type="checkbox" id="show-places" checked> Visa platser</label>
+    <label><input type="checkbox" id="show-fire" checked> Visa brandgator</label>
+    <label><input type="checkbox" id="show-grid" checked> Rutnät</label>
+    <span class="sep"></span>
+    <span style="color:var(--text-faint)" id="save-indicator">Sparat ✓</span>
+    <span class="scalebar">
+      <span id="scale-label">50 m</span>
+      <div class="bar" id="scale-bar"></div>
+    </span>
+    <span class="zoom">
+      <button id="zoom-out">−</button>
+      <input type="range" id="zoom" min="0.2" max="5" step="0.05" value="1">
+      <button id="zoom-in">＋</button>
+      <span id="zoom-val" style="min-width:40px;text-align:right">100%</span>
+    </span>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div id="multi-bar">
+  <span id="multi-count"></span>
+  <span class="sum" id="multi-sum"></span>
+  <button id="multi-align" title="Linja upp längs kajen">Linja upp</button>
+  <button id="multi-pack" title="Packa tätast möjligt">Packa</button>
+  <button id="multi-dup" title="Ctrl+D">Duplicera</button>
+  <button id="multi-delete" class="danger" title="Backspace">Radera</button>
+</div>
+<div id="drag-info"></div>
+<div id="toast"></div>
+<div id="calib-banner">📐 Klicka två punkter med känt avstånd — ESC avbryter</div>
+
+<!-- Cmd+K -->
+<div id="cmdk-backdrop"></div>
+<div id="cmdk">
+  <input type="text" id="cmdk-input" placeholder="Sök båt, ägare, plats, kommando…" autocomplete="off">
+  <div id="cmdk-list"></div>
+</div>
+
+<!-- Dialogs -->
+<dialog id="add-dialog">
+  <h3>Lägg till båt</h3>
+  <label>Namn</label><input type="text" id="new-name" value="Ny båt">
+  <div class="row">
+    <div><label>Längd (m)</label><input type="number" id="new-length" value="10" min="0.5" step="0.1"></div>
+    <div><label>Bredd (m)</label><input type="number" id="new-width" value="3" min="0.5" step="0.1"></div>
+  </div>
+  <label>Färg</label><input type="color" id="new-color" value="#3498db">
+  <div class="actions">
+    <button id="new-cancel">Avbryt</button>
+    <button class="primary" id="new-ok">Lägg till</button>
+  </div>
+</dialog>
+
+<dialog id="calib-dialog">
+  <h3>Kalibrera skalan</h3>
+  <p style="margin:6px 0; font-size:13px; color:var(--text-dim)">
+    Du markerade ett avstånd på <b id="calib-px"></b> canvaspixlar.<br>
+    Hur många meter är det i verkligheten?
+  </p>
+  <input type="number" id="calib-meters" value="50" min="0.1" step="0.1" autofocus>
+  <div class="actions">
+    <button id="calib-cancel">Avbryt</button>
+    <button class="primary" id="calib-ok">OK</button>
+  </div>
+</dialog>
+
+<dialog id="kaj-dialog">
+  <h3>Redigera kaj</h3>
+  <div class="row">
+    <div><label>Längd (m)</label><input type="number" id="kaj-len-input" min="10" step="1"></div>
+    <div><label>Bredd (m)</label><input type="number" id="kaj-width-input" min="1" step="0.5"></div>
+  </div>
+  <div class="actions">
+    <button id="kaj-cancel">Avbryt</button>
+    <button class="primary" id="kaj-ok">Spara</button>
+  </div>
+</dialog>
+
+<dialog id="bg-dialog">
+  <h3>Bakgrundsbild</h3>
+  <label>Opacitet <span id="bg-opacity-val">60%</span></label>
+  <input type="range" id="bg-opacity" min="0" max="100" value="60" style="width:100%">
+  <label>Bredd i verkligheten (m)</label>
+  <input type="number" id="bg-real-width" min="1" step="1">
+  <label>Rotation (°)</label>
+  <input type="number" id="bg-rot" step="0.1" value="0">
+  <div class="actions">
+    <button id="bg-reset" style="margin-right:auto">Återställ position</button>
+    <button id="bg-remove" class="danger">Ta bort bild</button>
+    <button class="primary" id="bg-close">Klar</button>
+  </div>
+</dialog>
+
+<dialog id="places-dialog" style="min-width:560px">
+  <h3>Platsnummer på kajen</h3>
+  <p style="font-size:12px; color:var(--text-dim); margin:4px 0 10px">
+    Definiera numrerade platser längs kajen. Klicka på en rad för att markera platsen på kartan.
+  </p>
+  <table class="table-like">
+    <thead>
+      <tr><th>Nr</th><th>Namn</th><th>Pos (m)</th><th>Bredd (m)</th><th>Min djup (m)</th><th></th></tr>
+    </thead>
+    <tbody id="places-tbody"></tbody>
+  </table>
+  <button id="places-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny plats</button>
+  <button id="places-auto" style="margin-left:6px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer" title="Skapa platser automatiskt från nuvarande båtars positioner">🪄 Auto från båtar</button>
+  <div class="actions">
+    <button class="primary" id="places-close">Klar</button>
+  </div>
+</dialog>
+
+<dialog id="owners-dialog" style="min-width:520px">
+  <h3>Ägare</h3>
+  <table class="table-like">
+    <thead>
+      <tr><th>Namn</th><th>E-post</th><th>Telefon</th><th></th></tr>
+    </thead>
+    <tbody id="owners-tbody"></tbody>
+  </table>
+  <button id="owners-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny ägare</button>
+  <div class="actions">
+    <button class="primary" id="owners-close">Klar</button>
+  </div>
+</dialog>
+
+<dialog id="fire-dialog" style="min-width:520px">
+  <h3>Brandgator / utrymningsvägar</h3>
+  <p style="font-size:12px; color:var(--text-dim); margin:4px 0 10px">
+    Gator som INTE får blockeras av båtar. De markeras i rött på kajen.
+  </p>
+  <table class="table-like">
+    <thead>
+      <tr><th>Namn</th><th>Pos (m)</th><th>Bredd (m)</th><th></th></tr>
+    </thead>
+    <tbody id="fire-tbody"></tbody>
+  </table>
+  <button id="fire-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny brandgata</button>
+  <div class="actions">
+    <button class="primary" id="fire-close">Klar</button>
+  </div>
+</dialog>
+
+<script>
+// ====================================================================================
+// EMBEDDED BOAT FACTS (research-backed; nullable fields mean "not known")
+// ====================================================================================
+const BOAT_FACTS = {
+  "jagaren": { built_year: null, yard: null, material: "aluminium", type: "motorbåt", k_marked: true,
+    story: "K-märkt motorbåt med aluminiumskrov, del av Sveriges maritima kulturarv enligt Sjöhistoriska museet. Enligt ägarna Sveriges första helsvetsade aluminiumbåt.",
+    sources: ["https://www.sjohistoriska.se/utforska/fartyg-kulturmiljoer/k-markning-av-fritidsbatar/lista-pa-k-markta-fritidsbatar/jagaren"] },
+  "s:t erik": { built_year: 1881, yard: null, material: "trä", type: "ångbåt", k_marked: null,
+    story: "Arkipelagbåt byggd 1881. Kom till Stockholm 1965 och blev från 1970-talet populär restaurang- och charterbåt. Sedan 1995 del av Strömma-flottan.",
+    sources: ["https://www.stromma.com/en-se/gothenburg/groups-charter/fleet/our-boats/ms-st-erik/"] },
+  "emm xxiii": { built_year: 1941, yard: "Kungsör Skeppsvarf", material: "mahogny / teak", type: "motorbåt", k_marked: null,
+    story: "Ursprungligen Ingeborg av Malmö, byggd 1940–41 på Kungsör Skeppsvarf. Användes som marinens minsvepare och senare som träningsbåt. 28 m med mahognyskrov, teakdäck och tvillingmotorer. Renoverad till historisk yacht.",
+    sources: ["https://www.boatinternational.com/yachts/the-superyacht-directory/emm-xxiii--61269"] },
+  "matilda järnd": { built_year: 1935, yard: null, material: "trä", type: "motorbåt", k_marked: null,
+    story: "Liten motorbåt, 11 × 3 m med 6-cylindrig Scania-Vabis-motor (135 hk, installerad på 1960-talet). Ursprungligt namn Wassns, bytte namn till Matilda Järndotter 2015. Registrerad i Göteborg.",
+    sources: ["http://www.tugboatlars.se/MatildaJarndotter.htm"] },
+  "eggskär": { built_year: null, yard: null, material: "stål", type: "bevakningsbåt", k_marked: null,
+    story: "HMS Eggskär (69) — en av marinens Mk 60/70-bevakningsbåtar, en klass om 17 båtar uppkallade efter svenska skär.",
+    sources: ["https://www.hhogman.se/warships-ptboats-6-swe.htm"] },
+  "sagitta": { built_year: 1961, yard: null, material: "trä", type: "tremastad skonert", k_marked: null,
+    story: "Tremastad skonert byggd 1961, cirka 36,5 m lång. Ursprungligen använd för Galapagos-kryssningar. Renoverad 1998. Elegant träfartyg med teakdäck.",
+    sources: ["https://www.earthboundadventures.com/sagitta/"] },
+};
+const STRAFFVERKET_CONTEXT = "Straffverket var Sveriges centralfängelse på Långholmen (1874–1977), idag hotell/museum. Marinan sannolikt Heleneborgs Båtklubb (grundad 1919) vid Pålsundet, en av världens största samlingar av klassiska träbåtar (ca 200 båtar). Många är k-märkta.";
+
+// ====================================================================================
+// STATE
+// ====================================================================================
+const state = {
+  kajLengthM: 619,
+  kajWidthM: 10,
+  canvasScale: 4,          // canvas pixels per meter (rendering resolution)
+  zoom: 1,                 // CSS zoom on top of canvasScale
+  boats: [],               // {id,name,lengthM,widthM,mx,my,rot,color,ownerId,placeId,draftM,year,yard,material,type,kmark,notes,photoUrl}
+  places: [],              // {id,number,mx,widthM,minDepthM,name,reservedForOwnerId}
+  owners: [],              // {id,name,email,phone}
+  fireLanes: [],           // {id,mx,widthM,label}
+  seasons: [],             // {id,year,name,layout:{boatId:{mx,my,rot,placeId}}, note}
+  currentSeasonId: null,
+  bg: null,                // {dataUrl,naturalW,naturalH,canvasX,canvasY,widthPx,opacity,rotation}
+  selectedIds: new Set(),
+  snap: false,
+  showPlaces: true,
+  showFire: true,
+  showGrid: true,
+  calibMode: false,
+  calibFirst: null,
+  calibDots: [],
+  mouseMeter: null,
+};
+
+// Undo/redo
+const history = { past: [], future: [] };
+const HISTORY_MAX = 80;
+
+// DOM refs (bound after DOMContentLoaded below where applicable)
+const canvas = document.getElementById('canvas');
+const canvasWrap = document.getElementById('canvas-wrap');
+const kajEl = document.getElementById('kaj');
+const bgImg = document.getElementById('bg-image');
+const bgHandleMove = document.getElementById('bg-handle-move');
+const bgHandleBr = document.getElementById('bg-handle-br');
+const rubberEl = document.getElementById('rubber');
+const dragInfoEl = document.getElementById('drag-info');
+
+// ====================================================================================
+// UTILITY
+// ====================================================================================
+function uid(prefix) { return (prefix||'') + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+const KAJ_X = 20; // canvas-px offset from canvas left to kaj left
+function kajTopY() { return 320; } // water-above space above kaj
+
+// Meter <-> canvas px conversions
+function mxToCx(mx) { return KAJ_X + mx * state.canvasScale; }
+function myToCy(my) { return kajTopY() + my * state.canvasScale; }
+function cxToMx(cx) { return (cx - KAJ_X) / state.canvasScale; }
+function cyToMy(cy) { return (cy - kajTopY()) / state.canvasScale; }
+
+// Color helpers
+function randColor() {
+  const pal = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#34495e','#d35400','#16a085','#8e44ad','#2c3e50'];
+  return pal[Math.floor(Math.random() * pal.length)];
+}
+function fixColor(c) {
+  if (!c) return randColor();
+  c = String(c).trim();
+  if (!c) return randColor();
+  if (!c.startsWith('#')) c = '#' + c;
+  if (/^#[0-9a-fA-F]{3,8}$/.test(c)) return c;
+  return randColor();
+}
+
+// Fact lookup (case-insensitive, also trying name variants)
+function lookupFacts(name) {
+  if (!name) return null;
+  const k = name.toLowerCase().trim();
+  if (BOAT_FACTS[k]) return BOAT_FACTS[k];
+  const alt = k.replace(/\s+/g, ' ');
+  if (BOAT_FACTS[alt]) return BOAT_FACTS[alt];
+  return null;
+}
+
+// Toast
+let toastTimer;
+function toast(msg, ms=2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), ms);
+}
+
+// ====================================================================================
+// PERSISTENCE
+// ====================================================================================
+function serialize() {
+  return {
+    kajLengthM: state.kajLengthM, kajWidthM: state.kajWidthM,
+    canvasScale: state.canvasScale,
+    boats: state.boats, places: state.places, owners: state.owners,
+    fireLanes: state.fireLanes, seasons: state.seasons,
+    currentSeasonId: state.currentSeasonId, bg: state.bg,
+  };
+}
+function save() {
+  try {
+    localStorage.setItem('kajplan', JSON.stringify(serialize()));
+    document.getElementById('save-indicator').textContent = 'Sparat ✓';
+  } catch(e) {
+    document.getElementById('save-indicator').textContent = 'Sparfel (storlek?)';
+  }
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('kajplan') || 'null');
+    if (!s) return false;
+    state.kajLengthM = s.kajLengthM ?? 619;
+    state.kajWidthM = s.kajWidthM ?? 10;
+    state.canvasScale = s.canvasScale ?? 4;
+    state.boats = (s.boats || []).map(migrateBoat);
+    state.places = s.places || [];
+    state.owners = s.owners || [];
+    state.fireLanes = s.fireLanes || [];
+    state.seasons = s.seasons || [];
+    state.currentSeasonId = s.currentSeasonId || null;
+    state.bg = s.bg || null;
+    return true;
+  } catch(e) {
+    console.error('Load failed', e);
+    return false;
+  }
+}
+
+// Migrate old-format boats (had x,y in canvas px + pxPerM separate).
+// If a boat has x/y but no mx/my, convert using old canvasScale (default 2).
+function migrateBoat(b) {
+  if (b.mx !== undefined && b.my !== undefined) return b;
+  const oldPxPerM = 2;
+  const mx = b.x !== undefined ? (b.x - KAJ_X) / oldPxPerM : 0;
+  const my = b.y !== undefined ? (b.y - kajTopY()) / oldPxPerM : 0;
+  return Object.assign({}, b, { mx, my });
+}
+
+// Undo/redo snapshots
+function pushHistory() {
+  history.past.push(JSON.stringify(serialize()));
+  if (history.past.length > HISTORY_MAX) history.past.shift();
+  history.future.length = 0;
+}
+function undo() {
+  if (!history.past.length) return;
+  const now = JSON.stringify(serialize());
+  history.future.push(now);
+  const prev = history.past.pop();
+  restoreFromJson(prev);
+  toast('Ångrat');
+}
+function redo() {
+  if (!history.future.length) return;
+  const now = JSON.stringify(serialize());
+  history.past.push(now);
+  const nxt = history.future.pop();
+  restoreFromJson(nxt);
+  toast('Gjort om');
+}
+function restoreFromJson(jsonStr) {
+  const s = JSON.parse(jsonStr);
+  Object.assign(state, {
+    kajLengthM: s.kajLengthM, kajWidthM: s.kajWidthM,
+    canvasScale: s.canvasScale,
+    boats: (s.boats||[]).map(migrateBoat),
+    places: s.places||[], owners: s.owners||[],
+    fireLanes: s.fireLanes||[], seasons: s.seasons||[],
+    currentSeasonId: s.currentSeasonId||null, bg: s.bg||null,
+  });
+  state.selectedIds = new Set();
+  renderAll(); save();
+}
+
+// ====================================================================================
+// LAYOUT + RENDER
+// ====================================================================================
+function layout() {
+  const lenPx = state.kajLengthM * state.canvasScale;
+  const kajPx = state.kajWidthM * state.canvasScale;
+  const totalW = Math.max(lenPx + 40,
+                          state.bg ? (state.bg.canvasX + state.bg.widthPx + 40) : 0);
+  const totalH = Math.max(kajTopY() + kajPx + 80,
+                          state.bg ? (state.bg.canvasY + state.bg.widthPx * (state.bg.naturalH/state.bg.naturalW) + 40) : 0);
+  canvas.style.width = totalW + 'px';
+  canvas.style.height = totalH + 'px';
+  canvas.style.transform = 'scale(' + state.zoom + ')';
+
+  kajEl.style.left = KAJ_X + 'px';
+  kajEl.style.top = kajTopY() + 'px';
+  kajEl.style.width = lenPx + 'px';
+  kajEl.style.height = kajPx + 'px';
+
+  // Grid
+  const scalePx = state.canvasScale;
+  const niceGridM = scalePx >= 8 ? 1 : scalePx >= 3 ? 5 : scalePx >= 1 ? 10 : 25;
+  const g = niceGridM * scalePx;
+  canvas.style.backgroundSize = g + 'px ' + g + 'px';
+  canvas.style.backgroundImage = state.showGrid
+    ? 'linear-gradient(to right, rgba(15,23,42,.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,.05) 1px, transparent 1px)'
+    : 'none';
+
+  // Bg
+  if (state.bg) {
+    bgImg.style.display = 'block';
+    bgImg.src = state.bg.dataUrl;
+    bgImg.style.left = state.bg.canvasX + 'px';
+    bgImg.style.top = state.bg.canvasY + 'px';
+    bgImg.style.width = state.bg.widthPx + 'px';
+    bgImg.style.height = (state.bg.widthPx * state.bg.naturalH / state.bg.naturalW) + 'px';
+    bgImg.style.opacity = state.bg.opacity;
+    bgImg.style.transform = 'rotate(' + (state.bg.rotation||0) + 'deg)';
+    bgImg.style.transformOrigin = '0 0';
+    updateBgHandles();
+  } else {
+    bgImg.style.display = 'none';
+    bgHandleMove.classList.remove('visible');
+    bgHandleBr.classList.remove('visible');
+  }
+
+  updateScaleBar();
+}
+
+function updateBgHandles() {
+  if (!state.bg || !state.selectedIds.size === 0) {
+    // handles visible whenever bg exists and no boat selection
+  }
+  if (state.bg) {
+    const showHandles = state.selectedIds.size === 0;
+    bgHandleMove.classList.toggle('visible', showHandles);
+    bgHandleBr.classList.toggle('visible', showHandles);
+    bgHandleMove.style.left = (state.bg.canvasX - 6) + 'px';
+    bgHandleMove.style.top = (state.bg.canvasY - 6) + 'px';
+    const h = state.bg.widthPx * state.bg.naturalH / state.bg.naturalW;
+    bgHandleBr.style.left = (state.bg.canvasX + state.bg.widthPx - 6) + 'px';
+    bgHandleBr.style.top = (state.bg.canvasY + h - 6) + 'px';
+  }
+}
+
+function renderAll() {
+  layout();
+  renderBoats();
+  renderPlaces();
+  renderFireLanes();
+  renderBoatList();
+  renderInspector();
+  updateStats();
+  renderSeasonSelect();
+  renderPlaceSelect();
+  renderOwnerSelect();
+  updateCollisions();
+}
+
+function renderBoats() {
+  const existing = new Map();
+  document.querySelectorAll('.boat').forEach(el => existing.set(el.dataset.id, el));
+  for (const b of state.boats) {
+    let el = existing.get(b.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'boat';
+      el.dataset.id = b.id;
+      const label = document.createElement('div');
+      label.className = 'label';
+      el.appendChild(label);
+      const rh = document.createElement('div');
+      rh.className = 'rot-handle';
+      el.appendChild(rh);
+      const km = document.createElement('div');
+      km.className = 'k-mark';
+      km.textContent = 'K';
+      el.appendChild(km);
+      canvas.appendChild(el);
+      attachBoatHandlers(el);
+    }
+    existing.delete(b.id);
+    const lenPx = b.lengthM * state.canvasScale;
+    const widPx = b.widthM * state.canvasScale;
+    el.style.width = lenPx + 'px';
+    el.style.height = widPx + 'px';
+    el.style.left = mxToCx(b.mx) + 'px';
+    el.style.top = myToCy(b.my) + 'px';
+    el.style.background = b.color;
+    el.style.transform = 'rotate(' + (b.rot||0) + 'deg)';
+    el.classList.toggle('selected', state.selectedIds.has(b.id));
+    const label = el.querySelector('.label');
+    label.textContent = b.name || '';
+    label.style.fontSize = Math.max(8, Math.min(widPx * 0.42, 15)) + 'px';
+    const km = el.querySelector('.k-mark');
+    const facts = lookupFacts(b.name);
+    const kmFlag = b.kmark || (facts && facts.k_marked);
+    km.style.display = kmFlag ? '' : 'none';
+    el.title = `${b.name} — ${b.lengthM.toFixed(1)} × ${b.widthM.toFixed(1)} m`;
+  }
+  // remove orphans
+  existing.forEach((el) => el.remove());
+}
+
+function renderPlaces() {
+  document.querySelectorAll('.place').forEach(el => el.remove());
+  if (!state.showPlaces) return;
+  for (const p of state.places) {
+    const el = document.createElement('div');
+    el.className = 'place';
+    const assigned = state.boats.some(b => b.placeId === p.id);
+    if (!assigned) el.classList.add('free');
+    if (p.reservedForOwnerId) el.classList.add('reserved');
+    el.style.left = mxToCx(p.mx) + 'px';
+    el.style.top = kajTopY() + 'px';
+    el.style.width = (p.widthM * state.canvasScale) + 'px';
+    el.style.height = (state.kajWidthM * state.canvasScale) + 'px';
+    el.textContent = p.number + (p.name ? ' ' + p.name : '');
+    canvas.appendChild(el);
+  }
+}
+
+function renderFireLanes() {
+  document.querySelectorAll('.fire-lane').forEach(el => el.remove());
+  if (!state.showFire) return;
+  for (const f of state.fireLanes) {
+    const el = document.createElement('div');
+    el.className = 'fire-lane';
+    el.style.left = mxToCx(f.mx) + 'px';
+    el.style.top = kajTopY() + 'px';
+    el.style.width = (f.widthM * state.canvasScale) + 'px';
+    el.style.height = (state.kajWidthM * state.canvasScale) + 'px';
+    el.textContent = (f.label || 'Brandgata');
+    canvas.appendChild(el);
+  }
+}
+
+// Scale bar - pick a nice number close to 100 screen pixels
+function updateScaleBar() {
+  const targetPx = 120;
+  const screenPxPerM = state.canvasScale * state.zoom;
+  const rawM = targetPx / screenPxPerM;
+  const nice = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  let chosen = nice[0];
+  for (const n of nice) if (n <= rawM * 1.5) chosen = n;
+  document.getElementById('scale-label').textContent = chosen + ' m';
+  document.getElementById('scale-bar').style.width = (chosen * screenPxPerM) + 'px';
+}
+
+// ====================================================================================
+// STATS + COLLISION
+// ====================================================================================
+function computeStats() {
+  const sortedBoats = state.boats.slice().filter(b => {
+    // only count boats docked along the kaj (my somewhat close to kaj top)
+    return Math.abs(b.my + b.widthM) < state.kajWidthM + 5 || (b.my + b.widthM >= -1 && b.my <= state.kajWidthM);
+  }).sort((a, b) => a.mx - b.mx);
+
+  // For utilization: consider projection on kaj's x axis
+  const segs = sortedBoats.map(b => {
+    // account for rotation bounding box
+    const r = (b.rot || 0) * Math.PI / 180;
+    const hw = b.lengthM/2, hh = b.widthM/2;
+    const bx = Math.abs(Math.cos(r))*hw + Math.abs(Math.sin(r))*hh;
+    const cx = b.mx + b.lengthM/2;
+    return { lo: cx - bx, hi: cx + bx, b };
+  }).filter(s => s.hi >= 0 && s.lo <= state.kajLengthM);
+
+  // Merge overlapping intervals
+  segs.sort((a,b) => a.lo - b.lo);
+  const merged = [];
+  for (const s of segs) {
+    const lo = Math.max(0, s.lo), hi = Math.min(state.kajLengthM, s.hi);
+    if (lo >= hi) continue;
+    if (merged.length && lo <= merged[merged.length-1].hi + 0.01) {
+      merged[merged.length-1].hi = Math.max(merged[merged.length-1].hi, hi);
+    } else {
+      merged.push({ lo, hi });
+    }
+  }
+  let used = 0;
+  merged.forEach(s => used += s.hi - s.lo);
+  const total = state.kajLengthM;
+  const free = total - used;
+  // Gaps
+  const gaps = [];
+  let cursor = 0;
+  for (const s of merged) {
+    if (s.lo - cursor > 0.5) gaps.push(s.lo - cursor);
+    cursor = s.hi;
+  }
+  if (total - cursor > 0.5) gaps.push(total - cursor);
+  return { used, free, total, gaps, pct: total > 0 ? (used/total*100) : 0 };
+}
+
+function updateStats() {
+  const s = computeStats();
+  document.getElementById('stat-kaj-len').textContent = state.kajLengthM + ' m';
+  document.getElementById('stat-kaj-width').textContent = state.kajWidthM + ' m';
+  document.getElementById('stat-count').textContent = state.boats.length;
+  document.getElementById('stat-used').textContent = s.used.toFixed(1) + ' m';
+  document.getElementById('stat-free').textContent = s.free.toFixed(1) + ' m';
+  const bar = document.getElementById('stat-bar');
+  bar.style.width = s.pct.toFixed(1) + '%';
+  bar.classList.toggle('full', s.pct >= 98);
+  bar.classList.toggle('high', s.pct >= 75 && s.pct < 98);
+  document.getElementById('stat-util-pct').textContent = s.pct.toFixed(1) + ' %';
+  const gapTxt = s.gaps.length ? `${s.free.toFixed(0)} m på ${s.gaps.length} ${s.gaps.length===1?'lucka':'luckor'}` : 'inga luckor';
+  document.getElementById('stat-gaps').textContent = gapTxt;
+}
+
+// Collisions: boats that overlap each other (AABB on rotated bounding boxes) OR stick out past kaj edges along the x-axis
+function detectCollisions() {
+  const colliding = new Set();
+  const problems = [];
+  const boxes = state.boats.map(b => aabbOfBoat(b));
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i+1; j < boxes.length; j++) {
+      const a = boxes[i], c = boxes[j];
+      if (a.hi_x > c.lo_x && a.lo_x < c.hi_x && a.hi_y > c.lo_y && a.lo_y < c.hi_y) {
+        colliding.add(a.b.id); colliding.add(c.b.id);
+        problems.push({ type:'overlap', a: a.b, b: c.b });
+      }
+    }
+  }
+  // Past kaj edges
+  for (const bx of boxes) {
+    if (bx.lo_x < -0.5) { colliding.add(bx.b.id); problems.push({ type:'leftEdge', a: bx.b }); }
+    if (bx.hi_x > state.kajLengthM + 0.5) { colliding.add(bx.b.id); problems.push({ type:'rightEdge', a: bx.b }); }
+  }
+  // Fire lanes
+  for (const bx of boxes) {
+    for (const f of state.fireLanes) {
+      if (bx.hi_x > f.mx && bx.lo_x < f.mx + f.widthM &&
+          bx.hi_y > 0 && bx.lo_y < state.kajWidthM) {
+        colliding.add(bx.b.id);
+        problems.push({ type:'fire', a: bx.b, fire: f });
+      }
+    }
+  }
+  return { colliding, problems };
+}
+
+function aabbOfBoat(b) {
+  const r = (b.rot||0) * Math.PI/180;
+  const hw = b.lengthM/2, hh = b.widthM/2;
+  const absCos = Math.abs(Math.cos(r)), absSin = Math.abs(Math.sin(r));
+  const bw = absCos*hw + absSin*hh;
+  const bh = absSin*hw + absCos*hh;
+  const cx = b.mx + b.lengthM/2;
+  const cy = b.my + b.widthM/2;
+  return { lo_x: cx - bw, hi_x: cx + bw, lo_y: cy - bh, hi_y: cy + bh, b };
+}
+
+function updateCollisions() {
+  const { colliding, problems } = detectCollisions();
+  document.querySelectorAll('.boat').forEach(el => {
+    el.classList.toggle('colliding', colliding.has(el.dataset.id));
+  });
+  const section = document.getElementById('collisions-section');
+  const list = document.getElementById('collision-list');
+  const countEl = document.getElementById('collision-count');
+  if (!problems.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  countEl.textContent = problems.length;
+  list.innerHTML = '';
+  problems.slice(0, 20).forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'list-item';
+    const dot = document.createElement('div'); dot.className = 'warn-dot';
+    d.appendChild(dot);
+    if (p.type === 'overlap') d.appendChild(document.createTextNode(`${p.a.name} ↔ ${p.b.name}`));
+    else if (p.type === 'leftEdge') d.appendChild(document.createTextNode(`${p.a.name} sticker ut (vänster)`));
+    else if (p.type === 'rightEdge') d.appendChild(document.createTextNode(`${p.a.name} sticker ut (höger)`));
+    else if (p.type === 'fire') d.appendChild(document.createTextNode(`${p.a.name} blockerar ${p.fire.label||'brandgata'}`));
+    d.onclick = () => { setSelection([p.a.id]); panToBoat(p.a); };
+    list.appendChild(d);
+  });
+}
+
+// ====================================================================================
+// BOAT LIST (in left panel)
+// ====================================================================================
+function renderBoatList() {
+  const wrap = document.getElementById('boat-list');
+  const filter = document.getElementById('boat-filter').value.toLowerCase().trim();
+  wrap.innerHTML = '';
+  const matching = state.boats
+    .filter(b => !filter || b.name.toLowerCase().includes(filter))
+    .sort((a,b) => a.name.localeCompare(b.name,'sv'));
+  document.getElementById('boat-list-filter-count').textContent =
+    filter ? ` ${matching.length}/${state.boats.length}` : ` ${state.boats.length}`;
+  for (const b of matching) {
+    const el = document.createElement('div');
+    el.className = 'list-item' + (state.selectedIds.has(b.id) ? ' sel' : '');
+    const sw = document.createElement('div'); sw.className = 'swatch';
+    sw.style.background = b.color; el.appendChild(sw);
+    el.appendChild(document.createTextNode(b.name));
+    const meta = document.createElement('span'); meta.className = 'muted';
+    meta.textContent = b.lengthM.toFixed(1) + 'm';
+    el.appendChild(meta);
+    el.onclick = (e) => {
+      if (e.shiftKey || e.metaKey || e.ctrlKey) toggleSelection(b.id);
+      else { setSelection([b.id]); panToBoat(b); }
+    };
+    wrap.appendChild(el);
+  }
+}
+document.getElementById('boat-filter').addEventListener('input', renderBoatList);
+
+// ====================================================================================
+// INSPECTOR
+// ====================================================================================
+function renderInspector() {
+  const n = state.selectedIds.size;
+  const empty = document.getElementById('inspector-empty');
+  const insp = document.getElementById('inspector');
+  const multi = document.getElementById('multi-bar');
+  if (n === 0) { empty.style.display = ''; insp.style.display = 'none'; multi.classList.remove('on'); return; }
+  if (n === 1) {
+    empty.style.display = 'none'; insp.style.display = '';
+    multi.classList.remove('on');
+    const b = firstSelected();
+    if (!b) return;
+    const set = (id, val) => { const el = document.getElementById(id); if (document.activeElement !== el) el.value = val ?? ''; };
+    set('insp-name', b.name);
+    set('insp-length', b.lengthM);
+    set('insp-width', b.widthM);
+    set('insp-draft', b.draftM);
+    set('insp-rot', Math.round(b.rot||0));
+    set('insp-color', b.color);
+    set('insp-place', b.placeId || '');
+    set('insp-owner', b.ownerId || '');
+    set('insp-year', b.year);
+    set('insp-yard', b.yard);
+    set('insp-material', b.material || '');
+    set('insp-type', b.type || '');
+    document.getElementById('insp-kmark').checked = !!b.kmark;
+    set('insp-notes', b.notes);
+    renderFactCard(b);
+  } else {
+    empty.style.display = 'none'; insp.style.display = 'none';
+    multi.classList.add('on');
+    const sumM = state.boats.filter(b => state.selectedIds.has(b.id)).reduce((s,b) => s+b.lengthM, 0);
+    document.getElementById('multi-count').textContent = n + ' båtar';
+    document.getElementById('multi-sum').textContent = `∑ ${sumM.toFixed(1)} m`;
+  }
+}
+
+function renderFactCard(b) {
+  const card = document.getElementById('fact-card');
+  const facts = lookupFacts(b.name) || {};
+  const year = b.year || facts.built_year;
+  const yard = b.yard || facts.yard;
+  const material = b.material || facts.material;
+  const type = b.type || facts.type;
+  const kmark = b.kmark || facts.k_marked;
+  const story = b.notes || facts.story;
+  const sources = facts.sources || [];
+  if (!year && !yard && !material && !type && !story && !kmark) {
+    card.innerHTML = `<div class="nodata">Ingen känd fakta om <b>${escapeHtml(b.name)}</b>.<br>Lägg till i Noter-fliken.</div>`;
+    return;
+  }
+  let html = `<div style="font-size:15px; font-weight:600; margin-bottom:6px">${escapeHtml(b.name)}</div>`;
+  html += `<div style="margin-bottom:6px">`;
+  if (year) html += `<span class="fact-year">Byggd ${year}</span>`;
+  if (type) html += `<span class="fact-year">${escapeHtml(type)}</span>`;
+  if (material) html += `<span class="fact-year">${escapeHtml(material)}</span>`;
+  if (kmark) html += `<span class="kmark">⭐ K-märkt</span>`;
+  html += `</div>`;
+  if (yard) html += `<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px">Varv: ${escapeHtml(yard)}</div>`;
+  if (story) html += `<div class="story">${escapeHtml(story)}</div>`;
+  if (sources.length) html += `<div class="sources">Källor: ${sources.map(s => `<a href="${s}" target="_blank" rel="noopener">länk</a>`).join(', ')}</div>`;
+  card.innerHTML = html;
+}
+function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// Tab switching
+document.querySelectorAll('#inspector .tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('#inspector .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const k = tab.dataset.tab;
+    document.querySelectorAll('#inspector .tab-content').forEach(c => {
+      c.style.display = c.dataset.tab === k ? '' : 'none';
+    });
+  };
+});
+
+// Inspector inputs
+const inspIds = ['insp-name','insp-length','insp-width','insp-draft','insp-rot','insp-color','insp-place','insp-owner','insp-year','insp-yard','insp-material','insp-type','insp-kmark','insp-notes'];
+inspIds.forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener(id === 'insp-color' || id === 'insp-kmark' ? 'change' : 'input', () => {
+    const b = firstSelected(); if (!b) return;
+    b.name = document.getElementById('insp-name').value || b.name;
+    b.lengthM = parseFloat(document.getElementById('insp-length').value) || b.lengthM;
+    b.widthM = parseFloat(document.getElementById('insp-width').value) || b.widthM;
+    const d = parseFloat(document.getElementById('insp-draft').value);
+    b.draftM = isNaN(d) ? null : d;
+    b.rot = parseFloat(document.getElementById('insp-rot').value) || 0;
+    b.color = document.getElementById('insp-color').value;
+    b.placeId = document.getElementById('insp-place').value || null;
+    b.ownerId = document.getElementById('insp-owner').value || null;
+    const y = parseInt(document.getElementById('insp-year').value);
+    b.year = isNaN(y) ? null : y;
+    b.yard = document.getElementById('insp-yard').value || null;
+    b.material = document.getElementById('insp-material').value || null;
+    b.type = document.getElementById('insp-type').value || null;
+    b.kmark = document.getElementById('insp-kmark').checked;
+    b.notes = document.getElementById('insp-notes').value || null;
+    renderBoats(); renderBoatList(); renderFactCard(b); updateCollisions();
+    updateStats(); save();
+  });
+});
+
+// ====================================================================================
+// SELECTION
+// ====================================================================================
+function setSelection(ids) { state.selectedIds = new Set(ids); refreshSelectionUI(); }
+function toggleSelection(id) {
+  if (state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
+  refreshSelectionUI();
+}
+function clearSelection() { setSelection([]); }
+function firstSelected() { const id = state.selectedIds.values().next().value; return state.boats.find(b => b.id === id); }
+function refreshSelectionUI() {
+  renderBoats();
+  renderBoatList();
+  renderInspector();
+  updateBgHandles();
+}
+
+// ====================================================================================
+// BOAT POINTER HANDLERS (drag, rotate)
+// ====================================================================================
+function attachBoatHandlers(el) {
+  let drag = null;
+  let rotDrag = null;
+
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.classList.contains('rot-handle')) return;
+    if (state.calibMode) return;
+    e.stopPropagation();
+    const id = el.dataset.id;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      toggleSelection(id);
+    } else if (!state.selectedIds.has(id)) {
+      setSelection([id]);
+    }
+    const moving = state.boats.filter(b => state.selectedIds.has(b.id));
+    pushHistory();
+    drag = {
+      startClientX: e.clientX, startClientY: e.clientY,
+      items: moving.map(b => ({ id: b.id, origMx: b.mx, origMy: b.my })),
+    };
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dxPx = (e.clientX - drag.startClientX) / state.zoom;
+    const dyPx = (e.clientY - drag.startClientY) / state.zoom;
+    const dMx = dxPx / state.canvasScale;
+    const dMy = dyPx / state.canvasScale;
+    const snapOn = document.getElementById('snap-toggle').checked;
+    drag.items.forEach(it => {
+      const b = state.boats.find(x => x.id === it.id);
+      if (!b) return;
+      let mx = it.origMx + dMx;
+      let my = it.origMy + dMy;
+      if (snapOn) { mx = Math.round(mx); my = Math.round(my); }
+      b.mx = mx; b.my = my;
+    });
+    renderBoats(); updateCollisions();
+    const b0 = state.boats.find(x => x.id === drag.items[0].id);
+    showDragInfo(e.clientX, e.clientY, b0, snapOn);
+  });
+  const end = () => { if (drag) { drag = null; hideDragInfo(); updateStats(); save(); } };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+
+  const rh = el.querySelector('.rot-handle');
+  rh.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    pushHistory();
+    const b = state.boats.find(x => x.id === el.dataset.id); if (!b) return;
+    const rect = el.getBoundingClientRect();
+    rotDrag = {
+      startRot: b.rot||0,
+      cx: rect.left + rect.width/2, cy: rect.top + rect.height/2,
+      startAng: Math.atan2(e.clientY - (rect.top + rect.height/2), e.clientX - (rect.left + rect.width/2)) * 180/Math.PI,
+    };
+    rh.setPointerCapture(e.pointerId);
+  });
+  rh.addEventListener('pointermove', (e) => {
+    if (!rotDrag) return;
+    const b = state.boats.find(x => x.id === el.dataset.id); if (!b) return;
+    const ang = Math.atan2(e.clientY - rotDrag.cy, e.clientX - rotDrag.cx) * 180/Math.PI;
+    let newRot = rotDrag.startRot + (ang - rotDrag.startAng);
+    if (e.shiftKey) newRot = Math.round(newRot/15)*15;
+    b.rot = ((newRot%360)+360)%360;
+    renderBoats();
+  });
+  const rhEnd = () => { if (rotDrag) { rotDrag = null; updateCollisions(); save(); } };
+  rh.addEventListener('pointerup', rhEnd);
+  rh.addEventListener('pointercancel', rhEnd);
+}
+
+function showDragInfo(clientX, clientY, b, snapOn) {
+  if (!b) return;
+  const mx = b.mx;
+  const my = b.my;
+  const toKaj = -my - b.widthM; // distance from boat's kaj-side to kaj edge
+  const fmt = (n) => snapOn ? Math.round(n) + ' m' : n.toFixed(1) + ' m';
+  dragInfoEl.textContent = `x: ${fmt(mx)}  ·  till kaj: ${fmt(toKaj)}`;
+  dragInfoEl.style.left = (clientX + 14) + 'px';
+  dragInfoEl.style.top = (clientY + 14) + 'px';
+  dragInfoEl.classList.add('on');
+}
+function hideDragInfo() { dragInfoEl.classList.remove('on'); }
+
+// ====================================================================================
+// RUBBER-BAND SELECTION
+// ====================================================================================
+let rubber = null;
+canvasWrap.addEventListener('pointerdown', (e) => {
+  if (state.calibMode) return;
+  if (e.target !== canvasWrap && e.target !== canvas && e.target !== kajEl && e.target !== bgImg && !e.target.classList.contains('place')) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / state.zoom;
+  const y = (e.clientY - rect.top) / state.zoom;
+  rubber = { x0: x, y0: y, x1: x, y1: y, shift: e.shiftKey || e.ctrlKey || e.metaKey, origIds: new Set(state.selectedIds) };
+  rubberEl.style.display = 'block';
+  updateRubber();
+  canvasWrap.setPointerCapture(e.pointerId);
+});
+canvasWrap.addEventListener('pointermove', (e) => {
+  if (!rubber) return;
+  const rect = canvas.getBoundingClientRect();
+  rubber.x1 = (e.clientX - rect.left) / state.zoom;
+  rubber.y1 = (e.clientY - rect.top) / state.zoom;
+  updateRubber();
+  const sel = new Set(rubber.shift ? rubber.origIds : []);
+  const box = rubberRect();
+  for (const b of state.boats) {
+    const bCx = mxToCx(b.mx), bCy = myToCy(b.my);
+    const bW = b.lengthM * state.canvasScale, bH = b.widthM * state.canvasScale;
+    if (!(bCx + bW < box.x || bCx > box.x + box.w || bCy + bH < box.y || bCy > box.y + box.h)) sel.add(b.id);
+  }
+  state.selectedIds = sel;
+  renderBoats(); renderBoatList();
+});
+canvasWrap.addEventListener('pointerup', () => {
+  if (!rubber) return;
+  const b = rubberRect();
+  const moved = b.w > 2 || b.h > 2;
+  rubber = null;
+  rubberEl.style.display = 'none';
+  if (!moved) clearSelection(); else refreshSelectionUI();
+});
+function rubberRect() {
+  return {
+    x: Math.min(rubber.x0, rubber.x1), y: Math.min(rubber.y0, rubber.y1),
+    w: Math.abs(rubber.x1 - rubber.x0), h: Math.abs(rubber.y1 - rubber.y0),
+  };
+}
+function updateRubber() {
+  const r = rubberRect();
+  rubberEl.style.left = r.x + 'px';
+  rubberEl.style.top = r.y + 'px';
+  rubberEl.style.width = r.w + 'px';
+  rubberEl.style.height = r.h + 'px';
+}
+
+// ====================================================================================
+// MOUSE COORDS TRACKING
+// ====================================================================================
+canvasWrap.addEventListener('pointermove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / state.zoom;
+  const cy = (e.clientY - rect.top) / state.zoom;
+  const mx = cxToMx(cx), my = cyToMy(cy);
+  state.mouseMeter = { mx, my };
+  document.getElementById('mouse-coord').textContent =
+    `${mx.toFixed(1)} m, ${my.toFixed(1)} m`;
+});
+
+// ====================================================================================
+// KEYBOARD
+// ====================================================================================
+document.addEventListener('keydown', (e) => {
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    if (isInput) return; e.preventDefault(); undo(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    if (isInput) return; e.preventDefault(); redo(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault(); openCmdK(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+    if (isInput) return; e.preventDefault(); duplicateSelected(); return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault(); save(); toast('Sparat'); return;
+  }
+  if (isInput) return;
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    if (state.selectedIds.size) { e.preventDefault(); deleteSelected(); }
+  } else if (e.key === 'Escape') {
+    if (state.calibMode) { exitCalibMode(); return; }
+    clearSelection(); closeCmdK();
+  } else if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && state.selectedIds.size) {
+    e.preventDefault();
+    const step = e.shiftKey ? 0.1 : 1;
+    const dx = e.key==='ArrowLeft' ? -step : e.key==='ArrowRight' ? step : 0;
+    const dy = e.key==='ArrowUp' ? -step : e.key==='ArrowDown' ? step : 0;
+    pushHistory();
+    state.boats.forEach(b => { if (state.selectedIds.has(b.id)) { b.mx += dx; b.my += dy; } });
+    renderBoats(); updateStats(); updateCollisions(); save();
+  }
+});
+
+// ====================================================================================
+// DELETE / DUPLICATE / ALIGN / PACK
+// ====================================================================================
+function deleteSelected() {
+  if (!state.selectedIds.size) return;
+  pushHistory();
+  state.boats = state.boats.filter(b => !state.selectedIds.has(b.id));
+  clearSelection(); renderAll(); save();
+}
+document.getElementById('insp-delete').addEventListener('click', deleteSelected);
+document.getElementById('multi-delete').addEventListener('click', deleteSelected);
+
+function duplicateSelected() {
+  if (!state.selectedIds.size) return;
+  pushHistory();
+  const orig = state.boats.filter(b => state.selectedIds.has(b.id));
+  const copies = orig.map(b => Object.assign({}, b, { id: uid('b'), mx: b.mx+2, my: b.my+2, placeId: null }));
+  state.boats = state.boats.concat(copies);
+  setSelection(copies.map(c=>c.id));
+  renderAll(); save();
+}
+document.getElementById('insp-dup').addEventListener('click', duplicateSelected);
+document.getElementById('multi-dup').addEventListener('click', duplicateSelected);
+
+function applyToSelected(fn) {
+  pushHistory();
+  state.boats.forEach(b => { if (state.selectedIds.has(b.id)) fn(b); });
+  renderBoats(); updateCollisions(); save();
+}
+document.getElementById('rot-plus-90').addEventListener('click', () => applyToSelected(b => { b.rot = ((b.rot||0)+90)%360; }));
+document.getElementById('rot-minus-90').addEventListener('click', () => applyToSelected(b => { b.rot = ((b.rot||0)-90+360)%360; }));
+document.getElementById('rot-reset').addEventListener('click', () => applyToSelected(b => { b.rot = 0; }));
+
+document.getElementById('multi-align').addEventListener('click', () => {
+  const sel = state.boats.filter(b => state.selectedIds.has(b.id)).sort((a,b)=>a.mx-b.mx);
+  if (!sel.length) return;
+  pushHistory();
+  let cursor = Math.max(0, sel[0].mx);
+  const gapM = 1;
+  sel.forEach(b => {
+    b.rot = 0;
+    b.mx = cursor;
+    b.my = -b.widthM - 0.3;
+    cursor += b.lengthM + gapM;
+  });
+  renderAll(); save();
+});
+document.getElementById('multi-pack').addEventListener('click', () => {
+  const sel = state.boats.filter(b => state.selectedIds.has(b.id)).sort((a,b)=>b.lengthM-a.lengthM);
+  if (!sel.length) return;
+  pushHistory();
+  let cursor = 0.2;
+  sel.forEach(b => {
+    b.rot = 0;
+    b.mx = cursor;
+    b.my = -b.widthM - 0.2;
+    cursor += b.lengthM + 0.2;
+  });
+  renderAll(); save();
+});
+
+// ====================================================================================
+// ADD BOAT
+// ====================================================================================
+const addDialog = document.getElementById('add-dialog');
+document.getElementById('add-boat').addEventListener('click', () => addDialog.showModal());
+document.getElementById('new-cancel').addEventListener('click', (e) => { e.preventDefault(); addDialog.close(); });
+document.getElementById('new-ok').addEventListener('click', (e) => {
+  e.preventDefault();
+  const name = document.getElementById('new-name').value || 'Båt';
+  const len = parseFloat(document.getElementById('new-length').value);
+  const wid = parseFloat(document.getElementById('new-width').value);
+  const color = document.getElementById('new-color').value;
+  if (!len || !wid) return;
+  pushHistory();
+  // place in current viewport center, in meters
+  const rect = canvasWrap.getBoundingClientRect();
+  const cCenterCx = (canvasWrap.scrollLeft + rect.width/2) / state.zoom;
+  const cCenterCy = (canvasWrap.scrollTop + rect.height/2) / state.zoom;
+  const centerMx = cxToMx(cCenterCx) - len/2;
+  const centerMy = cyToMy(cCenterCy) - wid/2;
+  const b = { id: uid('b'), name, lengthM: len, widthM: wid, color, mx: centerMx, my: centerMy, rot: 0 };
+  state.boats.push(b);
+  setSelection([b.id]);
+  renderAll(); save();
+  addDialog.close();
+});
+
+// ====================================================================================
+// CSV IMPORT
+// ====================================================================================
+document.getElementById('csv-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const txt = await file.text();
+  importCsv(txt);
+  e.target.value = '';
+});
+function importCsv(txt) {
+  const lines = txt.split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return;
+  let start = 0;
+  const first = lines[0].toLowerCase();
+  if (first.includes('namn') || first.includes('name') || first.includes('längd') || first.includes('length')) start = 1;
+  pushHistory();
+  let cursor = 0.5;
+  let row = 0;
+  const newBoats = [];
+  for (let i = start; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(s => s.trim());
+    if (parts.length < 3) continue;
+    const name = parts[0] || 'Båt';
+    const lengthM = parseFloat(parts[1]);
+    const widthM = parseFloat(parts[2]);
+    if (!lengthM || !widthM) continue;
+    const color = fixColor(parts[3]);
+    if (cursor + lengthM > state.kajLengthM) { cursor = 0.5; row++; }
+    newBoats.push({
+      id: uid('b'), name, lengthM, widthM, color,
+      mx: cursor, my: -widthM - 0.3 - row * (widthM + 2),
+      rot: 0,
+    });
+    cursor += lengthM + 1;
+  }
+  state.boats = state.boats.concat(newBoats);
+  renderAll(); save();
+  toast(`Läste in ${newBoats.length} båtar`);
+}
+
+// ====================================================================================
+// EXCEL IMPORT / EXPORT
+// ====================================================================================
+document.getElementById('xlsx-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf);
+  importXlsx(wb);
+  e.target.value = '';
+});
+function importXlsx(wb) {
+  pushHistory();
+  // Read Båtar sheet (if present) — columns: Namn, Längd, Bredd, Färg, Plats_nr, Ägare, Rot, MX, MY, Byggår, Varv, Material, Typ, Kmark, Djupgående, Noter
+  const readSheet = (nm) => {
+    const s = wb.Sheets[nm]; return s ? XLSX.utils.sheet_to_json(s, {defval:null}) : null;
+  };
+  const bSheet = readSheet('Båtar') || readSheet('Boats');
+  const pSheet = readSheet('Platser') || readSheet('Places');
+  const oSheet = readSheet('Ägare') || readSheet('Owners');
+
+  if (oSheet) {
+    state.owners = oSheet.map(r => ({
+      id: r.ID || r.Id || uid('o'),
+      name: r.Namn || r.Name || '',
+      email: r.Epost || r.Email || null,
+      phone: r.Telefon || r.Phone || null,
+    })).filter(o => o.name);
+  }
+  if (pSheet) {
+    state.places = pSheet.map(r => ({
+      id: r.ID || r.Id || uid('p'),
+      number: r.Nr || r.Number || '',
+      name: r.Namn || r.Name || '',
+      mx: Number(r.Position || r.MX || 0),
+      widthM: Number(r.Bredd || r.Width || 10),
+      minDepthM: r.MinDjup || r.MinDepth || null,
+      reservedForOwnerId: r.Reserverad || r.Reserved || null,
+    }));
+  }
+  if (bSheet) {
+    let cursor = 0.5, row = 0;
+    const newBoats = bSheet.map(r => {
+      const lengthM = Number(r.Längd || r.Length || 10);
+      const widthM = Number(r.Bredd || r.Width || 3);
+      let mx = r.MX !== null && r.MX !== undefined ? Number(r.MX) : null;
+      let my = r.MY !== null && r.MY !== undefined ? Number(r.MY) : null;
+      if (mx === null || isNaN(mx)) {
+        if (cursor + lengthM > state.kajLengthM) { cursor = 0.5; row++; }
+        mx = cursor; cursor += lengthM + 1;
+      }
+      if (my === null || isNaN(my)) my = -widthM - 0.3 - row*(widthM+2);
+      // Resolve owner by name
+      let ownerId = null;
+      if (r.Ägare || r.Owner) {
+        const ow = state.owners.find(o => o.name === (r.Ägare || r.Owner));
+        if (ow) ownerId = ow.id;
+      }
+      // Resolve place by number
+      let placeId = null;
+      if (r.Plats_nr || r.PlaceNumber) {
+        const pl = state.places.find(p => String(p.number) === String(r.Plats_nr || r.PlaceNumber));
+        if (pl) placeId = pl.id;
+      }
+      return {
+        id: r.ID || r.Id || uid('b'),
+        name: r.Namn || r.Name || 'Båt',
+        lengthM, widthM,
+        color: fixColor(r.Färg || r.Color),
+        mx, my, rot: Number(r.Rot || 0) || 0,
+        ownerId, placeId,
+        year: r.Byggår || r.Year || null,
+        yard: r.Varv || r.Yard || null,
+        material: r.Material || null,
+        type: r.Typ || r.Type || null,
+        kmark: r.Kmark === true || r.Kmark === 'ja' || r.Kmark === 'yes',
+        draftM: Number(r.Djupgående || r.Draft) || null,
+        notes: r.Noter || r.Notes || null,
+      };
+    });
+    state.boats = newBoats;
+  }
+  renderAll(); save();
+  toast('Excel importerad');
+}
+document.getElementById('export-xlsx').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+  // Båtar
+  const boats = state.boats.map(b => ({
+    ID: b.id, Namn: b.name, Längd: b.lengthM, Bredd: b.widthM, Färg: b.color,
+    MX: +b.mx.toFixed(2), MY: +b.my.toFixed(2), Rot: Math.round(b.rot||0),
+    Plats_nr: (state.places.find(p => p.id === b.placeId)||{}).number || '',
+    Ägare: (state.owners.find(o => o.id === b.ownerId)||{}).name || '',
+    Byggår: b.year || '', Varv: b.yard || '', Material: b.material || '',
+    Typ: b.type || '', Kmark: b.kmark ? 'ja' : '',
+    Djupgående: b.draftM ?? '',
+    Noter: b.notes || '',
+  }));
+  const boatsWs = XLSX.utils.json_to_sheet(boats);
+  XLSX.utils.book_append_sheet(wb, boatsWs, 'Båtar');
+  // Platser
+  const places = state.places.map(p => ({
+    ID: p.id, Nr: p.number, Namn: p.name || '',
+    Position: p.mx, Bredd: p.widthM, MinDjup: p.minDepthM ?? '',
+    Reserverad: p.reservedForOwnerId || '',
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(places), 'Platser');
+  // Ägare
+  const owners = state.owners.map(o => ({
+    ID: o.id, Namn: o.name, Epost: o.email || '', Telefon: o.phone || '',
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(owners), 'Ägare');
+  // Brandgator
+  const fires = state.fireLanes.map(f => ({ Namn: f.label || '', Position: f.mx, Bredd: f.widthM }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fires), 'Brandgator');
+  // Sammanfattning
+  const s = computeStats();
+  const summary = [
+    { Nyckel: 'Kaj längd', Värde: state.kajLengthM + ' m' },
+    { Nyckel: 'Kaj bredd', Värde: state.kajWidthM + ' m' },
+    { Nyckel: 'Antal båtar', Värde: state.boats.length },
+    { Nyckel: 'Belagt', Värde: s.used.toFixed(1) + ' m' },
+    { Nyckel: 'Ledigt', Värde: s.free.toFixed(1) + ' m' },
+    { Nyckel: 'Utnyttjandegrad', Värde: s.pct.toFixed(1) + ' %' },
+    { Nyckel: 'Exporterat', Värde: new Date().toISOString() },
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Sammanfattning');
+  XLSX.writeFile(wb, 'kaj-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  toast('Excel exporterad');
+});
+
+// ====================================================================================
+// BACKGROUND IMAGE + HANDLES
+// ====================================================================================
+document.getElementById('bg-input').addEventListener('change', (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      pushHistory();
+      const kajLenPx = state.kajLengthM * state.canvasScale;
+      state.bg = {
+        dataUrl: r.result,
+        naturalW: img.naturalWidth,
+        naturalH: img.naturalHeight,
+        canvasX: KAJ_X,
+        canvasY: kajTopY() - img.naturalHeight * (kajLenPx / img.naturalWidth) * 0.5,
+        widthPx: kajLenPx, // default: span the whole kaj
+        opacity: 0.6,
+        rotation: 0,
+      };
+      renderAll(); save();
+      toast('Bakgrund laddad — använd 📐 Kalibrera om skalan är fel');
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(file);
+  e.target.value = '';
+});
+
+// Bg move handle
+(function(){
+  let drag = null;
+  bgHandleMove.addEventListener('pointerdown', (e) => {
+    if (!state.bg) return;
+    e.stopPropagation();
+    pushHistory();
+    drag = { sx: e.clientX, sy: e.clientY, ox: state.bg.canvasX, oy: state.bg.canvasY };
+    bgHandleMove.setPointerCapture(e.pointerId);
+  });
+  bgHandleMove.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    state.bg.canvasX = drag.ox + (e.clientX - drag.sx)/state.zoom;
+    state.bg.canvasY = drag.oy + (e.clientY - drag.sy)/state.zoom;
+    layout();
+  });
+  bgHandleMove.addEventListener('pointerup', () => { if (drag) { drag=null; save(); } });
+})();
+(function(){
+  let drag = null;
+  bgHandleBr.addEventListener('pointerdown', (e) => {
+    if (!state.bg) return;
+    e.stopPropagation();
+    pushHistory();
+    drag = { sx: e.clientX, ow: state.bg.widthPx };
+    bgHandleBr.setPointerCapture(e.pointerId);
+  });
+  bgHandleBr.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.sx)/state.zoom;
+    state.bg.widthPx = Math.max(50, drag.ow + dx);
+    layout();
+  });
+  bgHandleBr.addEventListener('pointerup', () => { if (drag) { drag=null; save(); } });
+})();
+
+// Bg settings dialog
+const bgDialog = document.getElementById('bg-dialog');
+document.getElementById('bg-settings').addEventListener('click', () => {
+  if (!state.bg) { toast('Ingen bakgrund laddad'); return; }
+  document.getElementById('bg-opacity').value = Math.round(state.bg.opacity*100);
+  document.getElementById('bg-opacity-val').textContent = Math.round(state.bg.opacity*100) + '%';
+  document.getElementById('bg-real-width').value = (state.bg.widthPx / state.canvasScale).toFixed(1);
+  document.getElementById('bg-rot').value = state.bg.rotation || 0;
+  bgDialog.showModal();
+});
+document.getElementById('bg-opacity').addEventListener('input', (e) => {
+  if (!state.bg) return;
+  state.bg.opacity = e.target.value/100;
+  document.getElementById('bg-opacity-val').textContent = e.target.value + '%';
+  layout(); save();
+});
+document.getElementById('bg-real-width').addEventListener('input', (e) => {
+  if (!state.bg) return;
+  const m = parseFloat(e.target.value);
+  if (!m) return;
+  state.bg.widthPx = m * state.canvasScale;
+  layout(); save();
+});
+document.getElementById('bg-rot').addEventListener('input', (e) => {
+  if (!state.bg) return;
+  state.bg.rotation = parseFloat(e.target.value) || 0;
+  layout(); save();
+});
+document.getElementById('bg-reset').addEventListener('click', () => {
+  if (!state.bg) return;
+  state.bg.canvasX = KAJ_X; state.bg.canvasY = 0;
+  state.bg.rotation = 0;
+  state.bg.widthPx = state.kajLengthM * state.canvasScale;
+  layout(); save();
+});
+document.getElementById('bg-remove').addEventListener('click', () => {
+  pushHistory();
+  state.bg = null;
+  layout(); save(); bgDialog.close();
+});
+document.getElementById('bg-close').addEventListener('click', (e) => { e.preventDefault(); bgDialog.close(); });
+
+// ====================================================================================
+// CALIBRATION (simple: sets canvasScale from 2-point click)
+// ====================================================================================
+const calibBanner = document.getElementById('calib-banner');
+const calibDialog = document.getElementById('calib-dialog');
+document.getElementById('calibrate').addEventListener('click', () => enterCalibMode());
+function enterCalibMode() {
+  state.calibMode = true; state.calibFirst = null;
+  clearCalibDots();
+  calibBanner.classList.add('on');
+}
+function exitCalibMode() {
+  state.calibMode = false; state.calibFirst = null;
+  clearCalibDots();
+  calibBanner.classList.remove('on');
+}
+function clearCalibDots() { state.calibDots.forEach(d => d.remove()); state.calibDots = []; }
+function addCalibDot(x, y) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;background:#ef4444;border:2px solid #fff;border-radius:50%;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.4);z-index:100;';
+  d.style.left = x + 'px'; d.style.top = y + 'px';
+  canvas.appendChild(d);
+  state.calibDots.push(d);
+}
+canvas.addEventListener('click', (e) => {
+  if (!state.calibMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / state.zoom;
+  const y = (e.clientY - rect.top) / state.zoom;
+  if (!state.calibFirst) {
+    state.calibFirst = { x, y };
+    addCalibDot(x, y);
+  } else {
+    addCalibDot(x, y);
+    const dx = x - state.calibFirst.x, dy = y - state.calibFirst.y;
+    const distPx = Math.sqrt(dx*dx + dy*dy);
+    document.getElementById('calib-px').textContent = distPx.toFixed(1);
+    calibDialog.dataset.distPx = distPx;
+    calibDialog.showModal();
+    exitCalibMode();
+  }
+});
+document.getElementById('calib-cancel').addEventListener('click', (e) => {
+  e.preventDefault(); calibDialog.close(); clearCalibDots();
+});
+document.getElementById('calib-ok').addEventListener('click', (e) => {
+  e.preventDefault();
+  const meters = parseFloat(document.getElementById('calib-meters').value);
+  const distPx = parseFloat(calibDialog.dataset.distPx);
+  if (meters > 0 && distPx > 0) {
+    pushHistory();
+    const newScale = distPx / meters;
+    // Scale bg to keep visual alignment with calibration point (bg was displayed at
+    // a specific canvas size; we want the bg to keep showing the same real world —
+    // if user clicked on bg and typed real-meters, bg's widthPx already represents
+    // its real width correctly at the new canvasScale, so we multiply bg.widthPx by
+    // the ratio of new/old canvasScale to preserve its real-world meter width)
+    const ratio = newScale / state.canvasScale;
+    if (state.bg) {
+      state.bg.widthPx *= ratio;
+      state.bg.canvasX = KAJ_X + (state.bg.canvasX - KAJ_X) * ratio;
+      state.bg.canvasY *= ratio;
+    }
+    state.canvasScale = newScale;
+    renderAll(); save();
+    toast(`Skalan satt till ${newScale.toFixed(2)} canvas-px/m`);
+  }
+  calibDialog.close(); clearCalibDots();
+});
+
+// ====================================================================================
+// KAJ EDIT
+// ====================================================================================
+const kajDialog = document.getElementById('kaj-dialog');
+document.getElementById('edit-kaj').addEventListener('click', () => {
+  document.getElementById('kaj-len-input').value = state.kajLengthM;
+  document.getElementById('kaj-width-input').value = state.kajWidthM;
+  kajDialog.showModal();
+});
+document.getElementById('kaj-cancel').addEventListener('click', (e) => { e.preventDefault(); kajDialog.close(); });
+document.getElementById('kaj-ok').addEventListener('click', (e) => {
+  e.preventDefault();
+  pushHistory();
+  state.kajLengthM = parseFloat(document.getElementById('kaj-len-input').value) || 619;
+  state.kajWidthM = parseFloat(document.getElementById('kaj-width-input').value) || 10;
+  renderAll(); save();
+  kajDialog.close();
+});
+
+// ====================================================================================
+// ZOOM
+// ====================================================================================
+const zoomInput = document.getElementById('zoom');
+const zoomVal = document.getElementById('zoom-val');
+function setZoom(z) {
+  state.zoom = clamp(z, 0.2, 5);
+  zoomInput.value = state.zoom;
+  zoomVal.textContent = Math.round(state.zoom*100) + '%';
+  layout();
+}
+zoomInput.addEventListener('input', () => setZoom(parseFloat(zoomInput.value)));
+document.getElementById('zoom-in').addEventListener('click', () => setZoom(state.zoom * 1.2));
+document.getElementById('zoom-out').addEventListener('click', () => setZoom(state.zoom / 1.2));
+canvasWrap.addEventListener('wheel', (e) => {
+  if (e.shiftKey) return; // let browser scroll horizontally
+  e.preventDefault();
+  const rect = canvasWrap.getBoundingClientRect();
+  const mxp = e.clientX - rect.left, myp = e.clientY - rect.top;
+  const oldZ = state.zoom;
+  const cx = (mxp + canvasWrap.scrollLeft) / oldZ;
+  const cy = (myp + canvasWrap.scrollTop) / oldZ;
+  const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+  const newZ = clamp(oldZ*factor, 0.2, 5);
+  if (newZ === oldZ) return;
+  state.zoom = newZ;
+  zoomInput.value = newZ;
+  zoomVal.textContent = Math.round(newZ*100) + '%';
+  layout();
+  canvasWrap.scrollLeft = cx*newZ - mxp;
+  canvasWrap.scrollTop = cy*newZ - myp;
+}, { passive: false });
+
+// Pan to boat
+function panToBoat(b) {
+  if (!b) return;
+  const cx = mxToCx(b.mx + b.lengthM/2), cy = myToCy(b.my + b.widthM/2);
+  const rect = canvasWrap.getBoundingClientRect();
+  canvasWrap.scrollLeft = cx*state.zoom - rect.width/2;
+  canvasWrap.scrollTop = cy*state.zoom - rect.height/2;
+}
+
+// ====================================================================================
+// SHOW/HIDE TOGGLES
+// ====================================================================================
+document.getElementById('snap-toggle').addEventListener('change', (e) => { state.snap = e.target.checked; });
+document.getElementById('show-places').addEventListener('change', (e) => { state.showPlaces = e.target.checked; renderPlaces(); });
+document.getElementById('show-fire').addEventListener('change', (e) => { state.showFire = e.target.checked; renderFireLanes(); });
+document.getElementById('show-grid').addEventListener('change', (e) => { state.showGrid = e.target.checked; layout(); });
+
+// ====================================================================================
+// CMD+K SEARCH PALETTE
+// ====================================================================================
+const cmdkEl = document.getElementById('cmdk');
+const cmdkBd = document.getElementById('cmdk-backdrop');
+const cmdkInput = document.getElementById('cmdk-input');
+const cmdkList = document.getElementById('cmdk-list');
+let cmdkItems = [], cmdkSel = 0;
+document.getElementById('search-btn').addEventListener('click', openCmdK);
+cmdkBd.addEventListener('click', closeCmdK);
+function openCmdK() {
+  cmdkEl.classList.add('on'); cmdkBd.classList.add('on');
+  cmdkInput.value = ''; cmdkInput.focus();
+  renderCmdK('');
+}
+function closeCmdK() { cmdkEl.classList.remove('on'); cmdkBd.classList.remove('on'); }
+function renderCmdK(q) {
+  q = q.toLowerCase().trim();
+  const matches = (name) => !q || name.toLowerCase().includes(q);
+  const items = [];
+  // Boats
+  const boats = state.boats.filter(b => matches(b.name));
+  if (boats.length) {
+    items.push({ kind: 'h', text: 'Båtar' });
+    boats.slice(0, 20).forEach(b => items.push({
+      kind: 'boat', boat: b,
+      label: b.name, meta: `${b.lengthM.toFixed(1)} × ${b.widthM.toFixed(1)} m`
+    }));
+  }
+  // Places
+  const places = state.places.filter(p => matches(String(p.number) + ' ' + (p.name||'')));
+  if (places.length) {
+    items.push({ kind: 'h', text: 'Platser' });
+    places.slice(0, 10).forEach(p => items.push({
+      kind: 'place', place: p,
+      label: `Plats ${p.number}${p.name?' ('+p.name+')':''}`,
+      meta: `${p.mx.toFixed(0)} m`,
+    }));
+  }
+  // Owners
+  const owners = state.owners.filter(o => matches(o.name));
+  if (owners.length) {
+    items.push({ kind: 'h', text: 'Ägare' });
+    owners.slice(0, 10).forEach(o => items.push({
+      kind: 'owner', owner: o,
+      label: o.name,
+      meta: o.email || o.phone || '',
+    }));
+  }
+  // Commands
+  const cmds = [
+    { label: 'Lägg till båt', run: () => addDialog.showModal() },
+    { label: 'Hantera platser', run: () => openPlacesDialog() },
+    { label: 'Hantera ägare', run: () => openOwnersDialog() },
+    { label: 'Hantera brandgator', run: () => openFireDialog() },
+    { label: 'Exportera Excel', run: () => document.getElementById('export-xlsx').click() },
+    { label: 'Exportera A3-PDF', run: () => document.getElementById('export-pdf').click() },
+    { label: 'Exportera PNG', run: () => document.getElementById('export-png').click() },
+    { label: 'Dela via länk', run: () => document.getElementById('share-link').click() },
+    { label: 'Kalibrera skala', run: () => enterCalibMode() },
+    { label: 'Redigera kaj', run: () => document.getElementById('edit-kaj').click() },
+    { label: 'Ångra', run: undo },
+    { label: 'Gör om', run: redo },
+    { label: 'Töm markering', run: clearSelection },
+  ].filter(c => matches(c.label));
+  if (cmds.length) {
+    items.push({ kind: 'h', text: 'Kommandon' });
+    cmds.forEach(c => items.push({ kind: 'cmd', label: c.label, run: c.run }));
+  }
+  cmdkItems = items.filter(i => i.kind !== 'h' || items.some(x => x !== i && sameGroup(i, x)));
+  cmdkSel = 0;
+  cmdkList.innerHTML = '';
+  if (!items.length || !items.some(i => i.kind !== 'h')) {
+    cmdkList.innerHTML = '<div class="empty">Inga träffar</div>';
+    return;
+  }
+  items.forEach((it, idx) => {
+    if (it.kind === 'h') {
+      const h = document.createElement('div'); h.className = 'group-header'; h.textContent = it.text;
+      cmdkList.appendChild(h);
+    } else {
+      const d = document.createElement('div');
+      d.className = 'item';
+      d.dataset.idx = idx;
+      if (it.kind === 'boat') {
+        const sw = document.createElement('div'); sw.className='swatch'; sw.style.background = it.boat.color; d.appendChild(sw);
+      }
+      d.appendChild(document.createTextNode(it.label));
+      const m = document.createElement('span'); m.className='meta'; m.textContent = it.meta || '';
+      d.appendChild(m);
+      d.onclick = () => runCmdkItem(it);
+      cmdkList.appendChild(d);
+    }
+  });
+  highlightCmdK();
+}
+function sameGroup(a,b) { return true; }
+function highlightCmdK() {
+  const nodes = cmdkList.querySelectorAll('.item');
+  let nonHeaderIdx = 0;
+  nodes.forEach((n) => {
+    n.classList.remove('sel');
+    if (nonHeaderIdx === cmdkSel) n.classList.add('sel');
+    nonHeaderIdx++;
+  });
+}
+function runCmdkItem(it) {
+  closeCmdK();
+  if (it.kind === 'boat') { setSelection([it.boat.id]); panToBoat(it.boat); }
+  else if (it.kind === 'place') {
+    const b = { mx: it.place.mx, my: -5, lengthM: it.place.widthM, widthM: 5 };
+    panToBoat(b);
+  }
+  else if (it.kind === 'owner') {
+    const bs = state.boats.filter(b => b.ownerId === it.owner.id);
+    setSelection(bs.map(b=>b.id));
+    if (bs[0]) panToBoat(bs[0]);
+  }
+  else if (it.kind === 'cmd') it.run();
+}
+cmdkInput.addEventListener('input', (e) => renderCmdK(e.target.value));
+cmdkInput.addEventListener('keydown', (e) => {
+  const items = cmdkItems.filter(i => i.kind !== 'h');
+  if (e.key === 'ArrowDown') { e.preventDefault(); cmdkSel = Math.min(cmdkSel+1, items.length-1); highlightCmdK(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); cmdkSel = Math.max(cmdkSel-1, 0); highlightCmdK(); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (items[cmdkSel]) runCmdkItem(items[cmdkSel]); }
+  else if (e.key === 'Escape') { closeCmdK(); }
+});
+
+// ====================================================================================
+// PLACES DIALOG
+// ====================================================================================
+const placesDialog = document.getElementById('places-dialog');
+const placesTbody = document.getElementById('places-tbody');
+document.getElementById('manage-places').addEventListener('click', openPlacesDialog);
+function openPlacesDialog() { renderPlacesTable(); placesDialog.showModal(); }
+document.getElementById('places-close').addEventListener('click', (e) => {
+  e.preventDefault();
+  placesDialog.close();
+  renderAll(); save();
+});
+document.getElementById('places-add').addEventListener('click', () => {
+  state.places.push({
+    id: uid('p'),
+    number: (state.places.length + 1).toString(),
+    name: '', mx: 0, widthM: 15, minDepthM: null, reservedForOwnerId: null
+  });
+  renderPlacesTable();
+});
+document.getElementById('places-auto').addEventListener('click', () => {
+  pushHistory();
+  const sortedBoats = state.boats.slice().sort((a,b)=>a.mx-b.mx);
+  state.places = sortedBoats.map((b, i) => ({
+    id: uid('p'), number: String(i+1), name: '',
+    mx: b.mx - 0.2, widthM: b.lengthM + 0.4,
+    minDepthM: null, reservedForOwnerId: null,
+  }));
+  sortedBoats.forEach((b, i) => { b.placeId = state.places[i].id; });
+  renderPlacesTable();
+});
+function renderPlacesTable() {
+  placesTbody.innerHTML = '';
+  state.places.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" data-f="number" value="${escapeHtml(p.number)}"></td>
+      <td><input type="text" data-f="name" value="${escapeHtml(p.name||'')}"></td>
+      <td><input type="number" data-f="mx" value="${p.mx}" step="0.1"></td>
+      <td><input type="number" data-f="widthM" value="${p.widthM}" step="0.1" min="1"></td>
+      <td><input type="number" data-f="minDepthM" value="${p.minDepthM ?? ''}" step="0.1" min="0"></td>
+      <td><button class="del-btn">✕</button></td>`;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f = inp.dataset.f;
+        if (f === 'mx' || f === 'widthM' || f === 'minDepthM') {
+          const v = parseFloat(inp.value);
+          p[f] = isNaN(v) ? (f==='minDepthM'?null:0) : v;
+        } else {
+          p[f] = inp.value;
+        }
+      });
+    });
+    tr.querySelector('.del-btn').onclick = () => {
+      state.places.splice(i, 1);
+      state.boats.forEach(b => { if (b.placeId === p.id) b.placeId = null; });
+      renderPlacesTable();
+    };
+    placesTbody.appendChild(tr);
+  });
+}
+
+// ====================================================================================
+// OWNERS DIALOG
+// ====================================================================================
+const ownersDialog = document.getElementById('owners-dialog');
+const ownersTbody = document.getElementById('owners-tbody');
+document.getElementById('manage-owners').addEventListener('click', openOwnersDialog);
+function openOwnersDialog() { renderOwnersTable(); ownersDialog.showModal(); }
+document.getElementById('owners-close').addEventListener('click', (e) => {
+  e.preventDefault();
+  ownersDialog.close();
+  renderAll(); save();
+});
+document.getElementById('owners-add').addEventListener('click', () => {
+  state.owners.push({ id: uid('o'), name: '', email: '', phone: '' });
+  renderOwnersTable();
+});
+function renderOwnersTable() {
+  ownersTbody.innerHTML = '';
+  state.owners.forEach((o, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" data-f="name" value="${escapeHtml(o.name||'')}"></td>
+      <td><input type="text" data-f="email" value="${escapeHtml(o.email||'')}"></td>
+      <td><input type="text" data-f="phone" value="${escapeHtml(o.phone||'')}"></td>
+      <td><button class="del-btn">✕</button></td>`;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => { o[inp.dataset.f] = inp.value; });
+    });
+    tr.querySelector('.del-btn').onclick = () => {
+      state.owners.splice(i, 1);
+      state.boats.forEach(b => { if (b.ownerId === o.id) b.ownerId = null; });
+      renderOwnersTable();
+    };
+    ownersTbody.appendChild(tr);
+  });
+}
+
+// ====================================================================================
+// FIRE LANES
+// ====================================================================================
+const fireDialog = document.getElementById('fire-dialog');
+const fireTbody = document.getElementById('fire-tbody');
+document.getElementById('manage-fire').addEventListener('click', openFireDialog);
+function openFireDialog() { renderFireTable(); fireDialog.showModal(); }
+document.getElementById('fire-close').addEventListener('click', (e) => {
+  e.preventDefault(); fireDialog.close(); renderAll(); save();
+});
+document.getElementById('fire-add').addEventListener('click', () => {
+  state.fireLanes.push({ id: uid('f'), label: 'Brandgata', mx: 100, widthM: 3 });
+  renderFireTable();
+});
+function renderFireTable() {
+  fireTbody.innerHTML = '';
+  state.fireLanes.forEach((f, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" data-f="label" value="${escapeHtml(f.label||'')}"></td>
+      <td><input type="number" data-f="mx" value="${f.mx}" step="0.1"></td>
+      <td><input type="number" data-f="widthM" value="${f.widthM}" step="0.1" min="0.5"></td>
+      <td><button class="del-btn">✕</button></td>`;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f2 = inp.dataset.f;
+        if (f2 === 'mx' || f2 === 'widthM') {
+          const v = parseFloat(inp.value); f[f2] = isNaN(v) ? 0 : v;
+        } else { f[f2] = inp.value; }
+      });
+    });
+    tr.querySelector('.del-btn').onclick = () => { state.fireLanes.splice(i,1); renderFireTable(); };
+    fireTbody.appendChild(tr);
+  });
+}
+
+// ====================================================================================
+// PLACE & OWNER SELECT IN INSPECTOR
+// ====================================================================================
+function renderPlaceSelect() {
+  const sel = document.getElementById('insp-place');
+  const v = sel.value;
+  sel.innerHTML = '<option value="">(ingen)</option>';
+  state.places.slice().sort((a,b)=>String(a.number).localeCompare(String(b.number),'sv',{numeric:true})).forEach(p => {
+    const o = document.createElement('option'); o.value = p.id;
+    o.textContent = `${p.number}${p.name?' '+p.name:''} (${p.mx.toFixed(0)} m)`;
+    sel.appendChild(o);
+  });
+  sel.value = v;
+}
+function renderOwnerSelect() {
+  const sel = document.getElementById('insp-owner');
+  const v = sel.value;
+  sel.innerHTML = '<option value="">(okänd)</option>';
+  state.owners.slice().sort((a,b)=>a.name.localeCompare(b.name,'sv')).forEach(o => {
+    const op = document.createElement('option'); op.value = o.id; op.textContent = o.name;
+    sel.appendChild(op);
+  });
+  sel.value = v;
+}
+
+// ====================================================================================
+// SEASONS
+// ====================================================================================
+const seasonSelect = document.getElementById('season-select');
+document.getElementById('season-new').addEventListener('click', () => {
+  const year = prompt('Nytt år (t.ex. 2027)', String(new Date().getFullYear()+1));
+  if (!year) return;
+  // Save current layout to current season first (if any)
+  saveCurrentLayoutToCurrentSeason();
+  const newS = {
+    id: uid('s'), year: parseInt(year) || new Date().getFullYear()+1,
+    name: year, layout: {}, note: '',
+  };
+  state.seasons.push(newS);
+  state.currentSeasonId = newS.id;
+  renderSeasonSelect();
+  save();
+});
+function renderSeasonSelect() {
+  seasonSelect.innerHTML = '';
+  state.seasons.slice().sort((a,b)=>a.year-b.year).forEach(s => {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = s.name || String(s.year);
+    seasonSelect.appendChild(o);
+  });
+  if (state.currentSeasonId) seasonSelect.value = state.currentSeasonId;
+  if (!state.seasons.length) {
+    const o = document.createElement('option'); o.textContent = '(ingen)';
+    seasonSelect.appendChild(o);
+  }
+}
+seasonSelect.addEventListener('change', () => {
+  saveCurrentLayoutToCurrentSeason();
+  const newId = seasonSelect.value;
+  loadLayoutFromSeason(newId);
+});
+function saveCurrentLayoutToCurrentSeason() {
+  if (!state.currentSeasonId) return;
+  const s = state.seasons.find(x=>x.id===state.currentSeasonId); if (!s) return;
+  s.layout = {};
+  state.boats.forEach(b => { s.layout[b.id] = { mx: b.mx, my: b.my, rot: b.rot, placeId: b.placeId }; });
+}
+function loadLayoutFromSeason(id) {
+  state.currentSeasonId = id;
+  const s = state.seasons.find(x=>x.id===id);
+  if (s && s.layout) {
+    state.boats.forEach(b => {
+      const L = s.layout[b.id];
+      if (L) { b.mx = L.mx; b.my = L.my; b.rot = L.rot; b.placeId = L.placeId; }
+    });
+  }
+  renderAll(); save();
+}
+
+// ====================================================================================
+// SHARE VIA URL
+// ====================================================================================
+document.getElementById('share-link').addEventListener('click', () => {
+  const json = JSON.stringify(serialize());
+  const compressed = LZString.compressToEncodedURIComponent(json);
+  const url = location.origin + location.pathname + '#d=' + compressed;
+  if (url.length > 30000) {
+    toast('Statet är för stort för en URL — exportera Excel istället');
+    return;
+  }
+  navigator.clipboard.writeText(url).then(() => {
+    toast('Länk kopierad till urklipp');
+  }).catch(() => {
+    prompt('Kopiera länken:', url);
+  });
+});
+function loadFromHash() {
+  const h = location.hash;
+  if (!h.startsWith('#d=')) return false;
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(h.slice(3));
+    if (!json) return false;
+    if (confirm('Ladda delad plan från länken? Ersätter nuvarande data.')) {
+      restoreFromJson(json);
+      return true;
+    }
+  } catch(e) { console.error(e); }
+  return false;
+}
+
+// ====================================================================================
+// PNG + PDF EXPORT
+// ====================================================================================
+function drawToCanvas(targetCanvas) {
+  const W = parseFloat(canvas.style.width);
+  const H = parseFloat(canvas.style.height);
+  targetCanvas.width = W; targetCanvas.height = H;
+  const ctx = targetCanvas.getContext('2d');
+  // Water
+  ctx.fillStyle = '#d9e8f5'; ctx.fillRect(0, 0, W, H);
+  // Grid
+  const gm = state.canvasScale >= 8 ? 1 : state.canvasScale >= 3 ? 5 : 10;
+  const g = gm * state.canvasScale;
+  if (state.showGrid) {
+    ctx.strokeStyle = 'rgba(15,23,42,.06)'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += g) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y < H; y += g) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  }
+  // Bg
+  return new Promise((resolve) => {
+    const finishDraw = () => {
+      // Kaj
+      const kajX = KAJ_X, kajY = kajTopY();
+      const kajW = state.kajLengthM * state.canvasScale;
+      const kajH = state.kajWidthM * state.canvasScale;
+      const grad = ctx.createLinearGradient(0, kajY, 0, kajY + kajH);
+      grad.addColorStop(0, '#8b6f47'); grad.addColorStop(1, '#7a5f3e');
+      ctx.fillStyle = grad; ctx.fillRect(kajX, kajY, kajW, kajH);
+      ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(kajX, kajY); ctx.lineTo(kajX + kajW, kajY); ctx.stroke();
+      ctx.strokeStyle = 'rgba(90,74,53,.5)'; ctx.lineWidth = 1;
+      for (let x = kajX; x < kajX + kajW; x += 20) {
+        ctx.beginPath(); ctx.moveTo(x, kajY); ctx.lineTo(x, kajY + kajH); ctx.stroke();
+      }
+      // Fire lanes
+      if (state.showFire) state.fireLanes.forEach(f => {
+        const x0 = KAJ_X + f.mx*state.canvasScale;
+        const w = f.widthM*state.canvasScale;
+        ctx.fillStyle = 'rgba(220,38,38,.5)';
+        for (let i = 0; i < w; i += 12) {
+          ctx.fillRect(x0 + i, kajY, Math.min(6, w-i), kajH);
+        }
+        ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2;
+        ctx.strokeRect(x0, kajY, w, kajH);
+      });
+      // Places
+      if (state.showPlaces) state.places.forEach(p => {
+        const x0 = KAJ_X + p.mx*state.canvasScale;
+        const w = p.widthM*state.canvasScale;
+        ctx.setLineDash([4,4]);
+        ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, kajY); ctx.lineTo(x0+w, kajY); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '600 10px system-ui';
+        ctx.textAlign = 'center'; ctx.textBaseline='top';
+        ctx.fillText(p.number + (p.name?' '+p.name:''), x0 + w/2, kajY + 2);
+      });
+      // Boats
+      state.boats.forEach(b => {
+        const lenPx = b.lengthM * state.canvasScale;
+        const widPx = b.widthM * state.canvasScale;
+        const cx = KAJ_X + b.mx*state.canvasScale;
+        const cy = kajTopY() + b.my*state.canvasScale;
+        ctx.save();
+        ctx.translate(cx + lenPx/2, cy + widPx/2);
+        ctx.rotate((b.rot||0) * Math.PI / 180);
+        const r = Math.min(widPx*0.5, lenPx*0.45);
+        ctx.beginPath();
+        ctx.moveTo(-lenPx/2, -widPx/2);
+        ctx.lineTo(lenPx/2 - r, -widPx/2);
+        ctx.quadraticCurveTo(lenPx/2, -widPx/2, lenPx/2, 0);
+        ctx.quadraticCurveTo(lenPx/2, widPx/2, lenPx/2 - r, widPx/2);
+        ctx.lineTo(-lenPx/2, widPx/2);
+        ctx.closePath();
+        ctx.fillStyle = b.color; ctx.fill();
+        ctx.strokeStyle = 'rgba(30,41,59,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.font = `600 ${Math.max(8, Math.min(widPx*0.42, 15))}px system-ui`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+        ctx.strokeText(b.name, 0, 0);
+        ctx.fillText(b.name, 0, 0);
+        ctx.restore();
+      });
+      // Scale bar
+      const sm = 50, smPx = sm * state.canvasScale;
+      const sx = W - smPx - 30, sy = H - 40;
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(sx-8, sy-18, smPx+16, 28);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx+smPx, sy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx, sy-4); ctx.lineTo(sx, sy+4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx+smPx, sy-4); ctx.lineTo(sx+smPx, sy+4); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.font = '12px system-ui';
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(sm + ' m', sx+smPx/2, sy-6);
+      // Title
+      ctx.font = '700 18px system-ui'; ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const seas = state.seasons.find(s => s.id === state.currentSeasonId);
+      const title = 'Kajplanering' + (seas ? ` · ${seas.name || seas.year}` : '');
+      ctx.fillText(title, 12, 12);
+      ctx.font = '11px system-ui'; ctx.fillStyle = '#64748b';
+      ctx.fillText(new Date().toISOString().slice(0,10) + ' · ' + state.boats.length + ' båtar · ' + state.kajLengthM + ' m kaj', 12, 34);
+      resolve(targetCanvas);
+    };
+    if (state.bg) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        ctx.globalAlpha = state.bg.opacity;
+        ctx.translate(state.bg.canvasX, state.bg.canvasY);
+        ctx.rotate((state.bg.rotation||0) * Math.PI/180);
+        const h = state.bg.widthPx * state.bg.naturalH / state.bg.naturalW;
+        ctx.drawImage(img, 0, 0, state.bg.widthPx, h);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        finishDraw();
+      };
+      img.onerror = finishDraw;
+      img.src = state.bg.dataUrl;
+    } else finishDraw();
+  });
+}
+document.getElementById('export-png').addEventListener('click', async () => {
+  const c = document.createElement('canvas');
+  await drawToCanvas(c);
+  c.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'kaj.png'; a.click();
+  }, 'image/png');
+});
+document.getElementById('export-pdf').addEventListener('click', async () => {
+  const c = document.createElement('canvas');
+  await drawToCanvas(c);
+  const { jsPDF } = window.jspdf;
+  // A3 landscape: 420 × 297 mm
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+  const pageW = 420, pageH = 297;
+  const margin = 10;
+  const availW = pageW - 2*margin - 80; // reserve 80mm for side info
+  const availH = pageH - 2*margin;
+  const imgW = c.width, imgH = c.height;
+  const fit = Math.min(availW/imgW, availH/imgH);
+  const w = imgW * fit, h = imgH * fit;
+  const dataUrl = c.toDataURL('image/png');
+  pdf.addImage(dataUrl, 'PNG', margin, margin + (availH - h)/2, w, h);
+  // Side info
+  const sx = margin + availW + 10;
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
+  const seas = state.seasons.find(s => s.id === state.currentSeasonId);
+  pdf.text('Kajplan ' + (seas ? seas.name || seas.year : ''), sx, margin + 10);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+  let y = margin + 18;
+  pdf.text('Skapad: ' + new Date().toLocaleString('sv-SE'), sx, y); y += 6;
+  pdf.text('Kaj: ' + state.kajLengthM + ' × ' + state.kajWidthM + ' m', sx, y); y += 6;
+  const st = computeStats();
+  pdf.text('Båtar: ' + state.boats.length, sx, y); y += 6;
+  pdf.text('Belagt: ' + st.used.toFixed(1) + ' m (' + st.pct.toFixed(0) + ' %)', sx, y); y += 6;
+  pdf.text('Ledigt: ' + st.free.toFixed(1) + ' m', sx, y); y += 10;
+  pdf.setFont('helvetica', 'bold'); pdf.text('Båtlista', sx, y); y += 5;
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7);
+  const sortedBoats = state.boats.slice().sort((a,b)=>a.mx-b.mx);
+  sortedBoats.slice(0, 50).forEach(b => {
+    const line = `${b.name} — ${b.lengthM.toFixed(1)}×${b.widthM.toFixed(1)} m`;
+    pdf.text(line, sx, y); y += 3.5;
+    if (y > pageH - 15) { pdf.setFontSize(6); }
+  });
+  pdf.save('kaj-' + new Date().toISOString().slice(0,10) + '.pdf');
+  toast('PDF sparad');
+});
+
+// ====================================================================================
+// INIT / DEMO
+// ====================================================================================
+function addDemoBoats() {
+  const demos = [
+    { n: 'Anita', l: 22, w: 5.5, c: '#e74c3c' },
+    { n: 'Astral Dream', l: 23, w: 5.75, c: '#3498db' },
+    { n: 'Duen', l: 23, w: 4.96, c: '#9b59b6' },
+    { n: 'Jagaren', l: 18, w: 3.95, c: '#34495e' },
+    { n: 'Havden', l: 36, w: 6.9, c: '#3498db' },
+    { n: 'EMM XXIII', l: 29, w: 5, c: '#e67e22' },
+    { n: 'Sagitta', l: 26, w: 6, c: '#16a085' },
+    { n: 'S:T Erik', l: 24, w: 5, c: '#9b59b6' },
+  ];
+  let cursor = 0.5;
+  demos.forEach(d => {
+    state.boats.push({
+      id: uid('b'), name: d.n, lengthM: d.l, widthM: d.w, color: d.c,
+      mx: cursor, my: -d.w - 0.3, rot: 0,
+    });
+    cursor += d.l + 1;
+  });
+}
+
+async function init() {
+  if (!loadFromHash()) {
+    if (!load()) {
+     // Auto-ladda kajplan.xlsx från servern om localStorage är tomt
+    try {
+      const r = await fetch('kajplan.xlsx');
+      if (r.ok) {
+        const buf = await r.arrayBuffer();
+        const wb = XLSX.read(buf);
+        importXlsx(wb);
+      } else {
+        addDemoBoats();
+      }
+  } catch(e) {
+    addDemoBoats();
+  }
+    }
+  }
+
+  // If no current season, create one for current year
+  if (!state.seasons.length) {
+    const now = new Date().getFullYear();
+    const s = { id: uid('s'), year: now, name: String(now), layout: {}, note: '' };
+    state.seasons.push(s);
+    state.currentSeasonId = s.id;
+  }
+
+  renderAll();
+  updateScaleBar();
+
+  window.addEventListener('beforeunload', () => { saveCurrentLayoutToCurrentSeason(); save(); });
+}
+init();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+name: Bygg och pusha Docker-image
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checka ut kod
+        uses: actions/checkout@v4
+
+      - name: Logga in på GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bygg och pusha image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/ottoherdy/kajplanen:latest
+
+      - name: Trigga Portainer-deploy
+        if: ${{ secrets.PORTAINER_WEBHOOK_URL != '' }}
+        run: curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
