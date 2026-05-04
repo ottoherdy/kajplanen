@@ -548,6 +548,85 @@
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
   *::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: content-box; border: 2px solid transparent; }
+
+  /* ========= Mobil liggande läge ========= */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #app {
+      grid-template-columns: 0 1fr 0;
+      grid-template-rows: 40px 1fr 22px;
+    }
+
+    /* Sidopaneler som slide-in drawers */
+    #left-panel, #right-panel {
+      position: fixed;
+      top: 40px;
+      bottom: 22px;
+      z-index: 100;
+      transition: transform .2s ease;
+      overflow-y: auto;
+    }
+    #left-panel {
+      left: 0;
+      width: 240px;
+      transform: translateX(-100%);
+      box-shadow: var(--shadow-lg);
+      border-right: 1px solid var(--border);
+    }
+    #right-panel {
+      right: 0;
+      width: 270px;
+      transform: translateX(100%);
+      box-shadow: var(--shadow-lg);
+      border-left: 1px solid var(--border);
+    }
+    #left-panel.mob-open  { transform: translateX(0); }
+    #right-panel.mob-open { transform: translateX(0); }
+
+    /* Topbar: scrollbar horizontellt, kompaktare */
+    #topbar {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0 4px;
+      gap: 2px;
+      scrollbar-width: none;
+    }
+    #topbar::-webkit-scrollbar { display: none; }
+    #topbar button, #topbar label.filebtn { padding: 5px 7px; font-size: 11.5px; }
+    #topbar .search-btn { min-width: 120px; }
+    #topbar .brand span { display: none; } /* dölj text, behåll logo */
+
+    /* Toggle-knappar för panelerna */
+    .mob-toggle {
+      display: flex !important;
+      position: fixed;
+      top: 44px;
+      z-index: 101;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 0 0 6px 6px;
+      padding: 4px 8px;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      line-height: 1;
+    }
+    #mob-left-btn  { left: 8px; }
+    #mob-right-btn { right: 8px; }
+
+    /* Overlay-backdrop */
+    #mob-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,.3);
+      z-index: 99;
+    }
+    #mob-overlay.on { display: block; }
+
+    /* Bottenbar kompakt */
+    #bottom-bar { padding: 0 6px; gap: 6px; font-size: 10.5px; }
+    #bottom-bar .zoom input[type=range] { width: 70px; }
+  }
 </style>
 </head>
 <body>
@@ -724,6 +803,11 @@
       </div>
     </div>
   </aside>
+
+  <!-- ================= MOBIL TOGGLE-KNAPPAR ================= -->
+  <button class="mob-toggle" id="mob-left-btn"  style="display:none" title="Båtlista">☰</button>
+  <button class="mob-toggle" id="mob-right-btn" style="display:none" title="Inspektor">⚙</button>
+  <div id="mob-overlay"></div>
 
   <!-- ================= BOTTOM BAR ================= -->
   <div id="bottom-bar">
@@ -2825,6 +2909,35 @@ async function init() {
   window.addEventListener('beforeunload', () => { saveCurrentLayoutToCurrentSeason(); save(); });
 }
 init();
+
+// ========= Mobil panel-toggles =========
+(function() {
+  const leftPanel   = document.getElementById('left-panel');
+  const rightPanel  = document.getElementById('right-panel');
+  const overlay     = document.getElementById('mob-overlay');
+  const leftBtn     = document.getElementById('mob-left-btn');
+  const rightBtn    = document.getElementById('mob-right-btn');
+
+  function closeAll() {
+    leftPanel.classList.remove('mob-open');
+    rightPanel.classList.remove('mob-open');
+    overlay.classList.remove('on');
+  }
+
+  leftBtn.addEventListener('click', () => {
+    const open = leftPanel.classList.toggle('mob-open');
+    rightPanel.classList.remove('mob-open');
+    overlay.classList.toggle('on', open);
+  });
+
+  rightBtn.addEventListener('click', () => {
+    const open = rightPanel.classList.toggle('mob-open');
+    leftPanel.classList.remove('mob-open');
+    overlay.classList.toggle('on', open);
+  });
+
+  overlay.addEventListener('click', closeAll);
+})();
 
 </script>
 </body>
