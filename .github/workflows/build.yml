@@ -28,11 +28,3 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/ottoherdy/kajplanen:latest
-
-      - name: Trigger Portainer deploy
-        env:
-          WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
-        run: |
-          if [ -n "$WEBHOOK_URL" ]; then
-            curl -X POST "$WEBHOOK_URL"
-          fi
