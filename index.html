@@ -285,19 +285,6 @@
     border-radius: 50%; background: #10b981;
   }
 
-  /* Fire lane */
-  .fire-lane {
-    position: absolute; pointer-events: none;
-    background: repeating-linear-gradient(135deg,
-      rgba(220, 38, 38, .32) 0, rgba(220, 38, 38, .32) 6px,
-      rgba(220, 38, 38, .55) 6px, rgba(220, 38, 38, .55) 12px);
-    border-left: 2px solid #dc2626; border-right: 2px solid #dc2626;
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-size: 9px; font-weight: 700;
-    writing-mode: vertical-rl; text-orientation: mixed;
-    text-transform: uppercase; letter-spacing: .08em;
-    text-shadow: 0 0 3px rgba(0,0,0,.6);
-  }
 
   /* Boats */
   .boat {
@@ -642,21 +629,19 @@
       <div class="logo">⚓</div>
       <span>Kajplaneraren</span>
     </div>
-    <label class="filebtn">📂 Öppna CSV<input type="file" id="csv-input" accept=".csv,text/csv" hidden></label>
-    <label class="filebtn">📊 Öppna Excel<input type="file" id="xlsx-input" accept=".xlsx" hidden></label>
+    <label class="filebtn">Öppna CSV<input type="file" id="csv-input" accept=".csv,text/csv" hidden></label>
+    <label class="filebtn">Öppna Excel<input type="file" id="xlsx-input" accept=".xlsx" hidden></label>
     <div class="tsep"></div>
-    <button id="export-xlsx" title="Exportera till Excel med flera blad">💾 Exportera Excel</button>
-    <button id="export-pdf" title="Exportera som A3-PDF">🖨 A3-PDF</button>
-    <button id="export-png">🖼 PNG</button>
-    <button id="share-link" title="Kopiera delningslänk">🔗 Dela</button>
+    <button id="export-xlsx" title="Exportera till Excel">Exportera Excel</button>
+    <button id="export-pdf" title="Exportera som A3-PDF">A3-PDF</button>
+    <button id="export-png">PNG</button>
+    <button id="share-link" title="Kopiera delningslänk">Dela</button>
     <div class="tsep"></div>
     <button id="add-boat">＋ Båt</button>
     <button id="manage-places">Platser</button>
-    <button id="manage-owners">Ägare</button>
-    <button id="manage-fire">Brandgator</button>
     <div class="tsep"></div>
-    <label class="filebtn">🗺 Bild<input type="file" id="bg-input" accept="image/*" hidden></label>
-    <button id="calibrate" title="Klicka två punkter med känt avstånd">📐 Kalibrera</button>
+    <label class="filebtn">Bakgrundsbild<input type="file" id="bg-input" accept="image/*" hidden></label>
+    <button id="calibrate" title="Klicka två punkter med känt avstånd">Kalibrera</button>
     <button id="bg-settings">Bildinst.</button>
     <div class="tsep"></div>
     <div class="season">
@@ -664,7 +649,7 @@
       <button class="icon-btn" id="season-new" title="Ny säsong" style="background:transparent;border:none;cursor:pointer;padding:0 4px">＋</button>
     </div>
     <button class="search-btn" id="search-btn">
-      <span>🔍 Sök…</span>
+      <span>Sök…</span>
       <kbd>⌘K</kbd>
     </button>
   </div>
@@ -766,9 +751,7 @@
           <option value="">(ingen)</option>
         </select>
         <label>Ägare</label>
-        <select id="insp-owner">
-          <option value="">(okänd)</option>
-        </select>
+        <div id="insp-owner-display" style="padding:4px 6px; font-size:12.5px; color:var(--text-dim); background:var(--panel-2); border:1px solid var(--border); border-radius:4px; min-height:26px">—</div>
         <div class="actions">
           <button id="insp-dup" title="Ctrl+D">Duplicera</button>
           <button id="insp-delete" class="danger">Radera</button>
@@ -819,7 +802,6 @@
     <span class="sep"></span>
     <label><input type="checkbox" id="snap-toggle"> Snap 1 m</label>
     <label><input type="checkbox" id="show-places" checked> Visa platser</label>
-    <label><input type="checkbox" id="show-fire" checked> Visa brandgator</label>
     <label><input type="checkbox" id="show-grid" checked> Rutnät</label>
     <span class="sep"></span>
     <span style="color:var(--text-faint)" id="save-indicator">Sparat ✓</span>
@@ -847,12 +829,12 @@
 </div>
 <div id="drag-info"></div>
 <div id="toast"></div>
-<div id="calib-banner">📐 Klicka två punkter med känt avstånd — ESC avbryter</div>
+<div id="calib-banner">Klicka två punkter med känt avstånd — ESC avbryter</div>
 
 <!-- Cmd+K -->
 <div id="cmdk-backdrop"></div>
 <div id="cmdk">
-  <input type="text" id="cmdk-input" placeholder="Sök båt, ägare, plats, kommando…" autocomplete="off">
+  <input type="text" id="cmdk-input" placeholder="Sök båt, plats, kommando…" autocomplete="off">
   <div id="cmdk-list"></div>
 </div>
 
@@ -929,36 +911,6 @@
   </div>
 </dialog>
 
-<dialog id="owners-dialog" style="min-width:520px">
-  <h3>Ägare</h3>
-  <table class="table-like">
-    <thead>
-      <tr><th>Namn</th><th>E-post</th><th>Telefon</th><th></th></tr>
-    </thead>
-    <tbody id="owners-tbody"></tbody>
-  </table>
-  <button id="owners-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny ägare</button>
-  <div class="actions">
-    <button class="primary" id="owners-close">Klar</button>
-  </div>
-</dialog>
-
-<dialog id="fire-dialog" style="min-width:520px">
-  <h3>Brandgator / utrymningsvägar</h3>
-  <p style="font-size:12px; color:var(--text-dim); margin:4px 0 10px">
-    Gator som INTE får blockeras av båtar. De markeras i rött på kajen.
-  </p>
-  <table class="table-like">
-    <thead>
-      <tr><th>Namn</th><th>Pos (m)</th><th>Bredd (m)</th><th></th></tr>
-    </thead>
-    <tbody id="fire-tbody"></tbody>
-  </table>
-  <button id="fire-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny brandgata</button>
-  <div class="actions">
-    <button class="primary" id="fire-close">Klar</button>
-  </div>
-</dialog>
 
 <script>
 // ====================================================================================
@@ -996,15 +948,13 @@ const state = {
   zoom: 1,                 // CSS zoom on top of canvasScale
   boats: [],               // {id,name,lengthM,widthM,mx,my,rot,color,ownerId,placeId,draftM,year,yard,material,type,kmark,notes,photoUrl}
   places: [],              // {id,number,mx,widthM,minDepthM,name,reservedForOwnerId}
-  owners: [],              // {id,name,email,phone}
-  fireLanes: [],           // {id,mx,widthM,label}
+  owners: [],              // {id,name,email,phone} — kept for import compat
   seasons: [],             // {id,year,name,layout:{boatId:{mx,my,rot,placeId}}, note}
   currentSeasonId: null,
   bg: null,                // {dataUrl,naturalW,naturalH,canvasX,canvasY,widthPx,opacity,rotation}
   selectedIds: new Set(),
   snap: false,
   showPlaces: true,
-  showFire: true,
   showGrid: true,
   calibMode: false,
   calibFirst: null,
@@ -1082,7 +1032,7 @@ function serialize() {
     kajLengthM: state.kajLengthM, kajWidthM: state.kajWidthM,
     canvasScale: state.canvasScale,
     boats: state.boats, places: state.places, owners: state.owners,
-    fireLanes: state.fireLanes, seasons: state.seasons,
+    seasons: state.seasons,
     currentSeasonId: state.currentSeasonId, bg: state.bg,
   };
 }
@@ -1104,7 +1054,6 @@ function load() {
     state.boats = (s.boats || []).map(migrateBoat);
     state.places = s.places || [];
     state.owners = s.owners || [];
-    state.fireLanes = s.fireLanes || [];
     state.seasons = s.seasons || [];
     state.currentSeasonId = s.currentSeasonId || null;
     state.bg = s.bg || null;
@@ -1154,7 +1103,7 @@ function restoreFromJson(jsonStr) {
     canvasScale: s.canvasScale,
     boats: (s.boats||[]).map(migrateBoat),
     places: s.places||[], owners: s.owners||[],
-    fireLanes: s.fireLanes||[], seasons: s.seasons||[],
+    seasons: s.seasons||[],
     currentSeasonId: s.currentSeasonId||null, bg: s.bg||null,
   });
   state.selectedIds = new Set();
@@ -1230,13 +1179,11 @@ function renderAll() {
   layout();
   renderBoats();
   renderPlaces();
-  renderFireLanes();
   renderBoatList();
   renderInspector();
   updateStats();
   renderSeasonSelect();
   renderPlaceSelect();
-  renderOwnerSelect();
   updateCollisions();
 }
 
@@ -1303,20 +1250,6 @@ function renderPlaces() {
   }
 }
 
-function renderFireLanes() {
-  document.querySelectorAll('.fire-lane').forEach(el => el.remove());
-  if (!state.showFire) return;
-  for (const f of state.fireLanes) {
-    const el = document.createElement('div');
-    el.className = 'fire-lane';
-    el.style.left = mxToCx(f.mx) + 'px';
-    el.style.top = kajTopY() + 'px';
-    el.style.width = (f.widthM * state.canvasScale) + 'px';
-    el.style.height = (state.kajWidthM * state.canvasScale) + 'px';
-    el.textContent = (f.label || 'Brandgata');
-    canvas.appendChild(el);
-  }
-}
 
 // Scale bar - pick a nice number close to 100 screen pixels
 function updateScaleBar() {
@@ -1411,16 +1344,6 @@ function detectCollisions() {
     if (bx.lo_x < -0.5) { colliding.add(bx.b.id); problems.push({ type:'leftEdge', a: bx.b }); }
     if (bx.hi_x > state.kajLengthM + 0.5) { colliding.add(bx.b.id); problems.push({ type:'rightEdge', a: bx.b }); }
   }
-  // Fire lanes
-  for (const bx of boxes) {
-    for (const f of state.fireLanes) {
-      if (bx.hi_x > f.mx && bx.lo_x < f.mx + f.widthM &&
-          bx.hi_y > 0 && bx.lo_y < state.kajWidthM) {
-        colliding.add(bx.b.id);
-        problems.push({ type:'fire', a: bx.b, fire: f });
-      }
-    }
-  }
   return { colliding, problems };
 }
 
@@ -1513,7 +1436,8 @@ function renderInspector() {
     set('insp-rot', Math.round(b.rot||0));
     set('insp-color', b.color);
     set('insp-place', b.placeId || '');
-    set('insp-owner', b.ownerId || '');
+    const owner = b.ownerId ? (state.owners.find(o => o.id === b.ownerId)||{}).name : null;
+    document.getElementById('insp-owner-display').textContent = owner || '—';
     set('insp-year', b.year);
     set('insp-yard', b.yard);
     set('insp-material', b.material || '');
@@ -1571,7 +1495,7 @@ document.querySelectorAll('#inspector .tab').forEach(tab => {
 });
 
 // Inspector inputs
-const inspIds = ['insp-name','insp-length','insp-width','insp-draft','insp-rot','insp-color','insp-place','insp-owner','insp-year','insp-yard','insp-material','insp-type','insp-kmark','insp-notes'];
+const inspIds = ['insp-name','insp-length','insp-width','insp-draft','insp-rot','insp-color','insp-place','insp-year','insp-yard','insp-material','insp-type','insp-kmark','insp-notes'];
 inspIds.forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1585,7 +1509,6 @@ inspIds.forEach(id => {
     b.rot = parseFloat(document.getElementById('insp-rot').value) || 0;
     b.color = document.getElementById('insp-color').value;
     b.placeId = document.getElementById('insp-place').value || null;
-    b.ownerId = document.getElementById('insp-owner').value || null;
     const y = parseInt(document.getElementById('insp-year').value);
     b.year = isNaN(y) ? null : y;
     b.yard = document.getElementById('insp-yard').value || null;
@@ -2098,14 +2021,6 @@ document.getElementById('export-xlsx').addEventListener('click', () => {
     Reserverad: p.reservedForOwnerId || '',
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(places), 'Platser');
-  // Ägare
-  const owners = state.owners.map(o => ({
-    ID: o.id, Namn: o.name, Epost: o.email || '', Telefon: o.phone || '',
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(owners), 'Ägare');
-  // Brandgator
-  const fires = state.fireLanes.map(f => ({ Namn: f.label || '', Position: f.mx, Bredd: f.widthM }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fires), 'Brandgator');
   // Sammanfattning
   const s = computeStats();
   const summary = [
@@ -2366,7 +2281,6 @@ function panToBoat(b) {
 // ====================================================================================
 document.getElementById('snap-toggle').addEventListener('change', (e) => { state.snap = e.target.checked; });
 document.getElementById('show-places').addEventListener('change', (e) => { state.showPlaces = e.target.checked; renderPlaces(); });
-document.getElementById('show-fire').addEventListener('change', (e) => { state.showFire = e.target.checked; renderFireLanes(); });
 document.getElementById('show-grid').addEventListener('change', (e) => { state.showGrid = e.target.checked; layout(); });
 
 // ====================================================================================
@@ -2408,22 +2322,10 @@ function renderCmdK(q) {
       meta: `${p.mx.toFixed(0)} m`,
     }));
   }
-  // Owners
-  const owners = state.owners.filter(o => matches(o.name));
-  if (owners.length) {
-    items.push({ kind: 'h', text: 'Ägare' });
-    owners.slice(0, 10).forEach(o => items.push({
-      kind: 'owner', owner: o,
-      label: o.name,
-      meta: o.email || o.phone || '',
-    }));
-  }
   // Commands
   const cmds = [
     { label: 'Lägg till båt', run: () => addDialog.showModal() },
     { label: 'Hantera platser', run: () => openPlacesDialog() },
-    { label: 'Hantera ägare', run: () => openOwnersDialog() },
-    { label: 'Hantera brandgator', run: () => openFireDialog() },
     { label: 'Exportera Excel', run: () => document.getElementById('export-xlsx').click() },
     { label: 'Exportera A3-PDF', run: () => document.getElementById('export-pdf').click() },
     { label: 'Exportera PNG', run: () => document.getElementById('export-png').click() },
@@ -2481,11 +2383,6 @@ function runCmdkItem(it) {
   else if (it.kind === 'place') {
     const b = { mx: it.place.mx, my: -5, lengthM: it.place.widthM, widthM: 5 };
     panToBoat(b);
-  }
-  else if (it.kind === 'owner') {
-    const bs = state.boats.filter(b => b.ownerId === it.owner.id);
-    setSelection(bs.map(b=>b.id));
-    if (bs[0]) panToBoat(bs[0]);
   }
   else if (it.kind === 'cmd') it.run();
 }
@@ -2560,81 +2457,10 @@ function renderPlacesTable() {
   });
 }
 
-// ====================================================================================
-// OWNERS DIALOG
-// ====================================================================================
-const ownersDialog = document.getElementById('owners-dialog');
-const ownersTbody = document.getElementById('owners-tbody');
-document.getElementById('manage-owners').addEventListener('click', openOwnersDialog);
-function openOwnersDialog() { renderOwnersTable(); ownersDialog.showModal(); }
-document.getElementById('owners-close').addEventListener('click', (e) => {
-  e.preventDefault();
-  ownersDialog.close();
-  renderAll(); save();
-});
-document.getElementById('owners-add').addEventListener('click', () => {
-  state.owners.push({ id: uid('o'), name: '', email: '', phone: '' });
-  renderOwnersTable();
-});
-function renderOwnersTable() {
-  ownersTbody.innerHTML = '';
-  state.owners.forEach((o, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input type="text" data-f="name" value="${escapeHtml(o.name||'')}"></td>
-      <td><input type="text" data-f="email" value="${escapeHtml(o.email||'')}"></td>
-      <td><input type="text" data-f="phone" value="${escapeHtml(o.phone||'')}"></td>
-      <td><button class="del-btn">✕</button></td>`;
-    tr.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => { o[inp.dataset.f] = inp.value; });
-    });
-    tr.querySelector('.del-btn').onclick = () => {
-      state.owners.splice(i, 1);
-      state.boats.forEach(b => { if (b.ownerId === o.id) b.ownerId = null; });
-      renderOwnersTable();
-    };
-    ownersTbody.appendChild(tr);
-  });
-}
+
 
 // ====================================================================================
-// FIRE LANES
-// ====================================================================================
-const fireDialog = document.getElementById('fire-dialog');
-const fireTbody = document.getElementById('fire-tbody');
-document.getElementById('manage-fire').addEventListener('click', openFireDialog);
-function openFireDialog() { renderFireTable(); fireDialog.showModal(); }
-document.getElementById('fire-close').addEventListener('click', (e) => {
-  e.preventDefault(); fireDialog.close(); renderAll(); save();
-});
-document.getElementById('fire-add').addEventListener('click', () => {
-  state.fireLanes.push({ id: uid('f'), label: 'Brandgata', mx: 100, widthM: 3 });
-  renderFireTable();
-});
-function renderFireTable() {
-  fireTbody.innerHTML = '';
-  state.fireLanes.forEach((f, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input type="text" data-f="label" value="${escapeHtml(f.label||'')}"></td>
-      <td><input type="number" data-f="mx" value="${f.mx}" step="0.1"></td>
-      <td><input type="number" data-f="widthM" value="${f.widthM}" step="0.1" min="0.5"></td>
-      <td><button class="del-btn">✕</button></td>`;
-    tr.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const f2 = inp.dataset.f;
-        if (f2 === 'mx' || f2 === 'widthM') {
-          const v = parseFloat(inp.value); f[f2] = isNaN(v) ? 0 : v;
-        } else { f[f2] = inp.value; }
-      });
-    });
-    tr.querySelector('.del-btn').onclick = () => { state.fireLanes.splice(i,1); renderFireTable(); };
-    fireTbody.appendChild(tr);
-  });
-}
-
-// ====================================================================================
-// PLACE & OWNER SELECT IN INSPECTOR
+// PLACE SELECT IN INSPECTOR
 // ====================================================================================
 function renderPlaceSelect() {
   const sel = document.getElementById('insp-place');
@@ -2644,16 +2470,6 @@ function renderPlaceSelect() {
     const o = document.createElement('option'); o.value = p.id;
     o.textContent = `${p.number}${p.name?' '+p.name:''} (${p.mx.toFixed(0)} m)`;
     sel.appendChild(o);
-  });
-  sel.value = v;
-}
-function renderOwnerSelect() {
-  const sel = document.getElementById('insp-owner');
-  const v = sel.value;
-  sel.innerHTML = '<option value="">(okänd)</option>';
-  state.owners.slice().sort((a,b)=>a.name.localeCompare(b.name,'sv')).forEach(o => {
-    const op = document.createElement('option'); op.value = o.id; op.textContent = o.name;
-    sel.appendChild(op);
   });
   sel.value = v;
 }
@@ -2776,17 +2592,6 @@ function drawToCanvas(targetCanvas) {
       for (let x = kajX; x < kajX + kajW; x += 20) {
         ctx.beginPath(); ctx.moveTo(x, kajY); ctx.lineTo(x, kajY + kajH); ctx.stroke();
       }
-      // Fire lanes
-      if (state.showFire) state.fireLanes.forEach(f => {
-        const x0 = KAJ_X + f.mx*state.canvasScale;
-        const w = f.widthM*state.canvasScale;
-        ctx.fillStyle = 'rgba(220,38,38,.5)';
-        for (let i = 0; i < w; i += 12) {
-          ctx.fillRect(x0 + i, kajY, Math.min(6, w-i), kajH);
-        }
-        ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2;
-        ctx.strokeRect(x0, kajY, w, kajH);
-      });
       // Places
       if (state.showPlaces) state.places.forEach(p => {
         const x0 = KAJ_X + p.mx*state.canvasScale;
