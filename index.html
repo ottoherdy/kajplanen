@@ -235,8 +235,10 @@
     background:
       radial-gradient(ellipse at 50% 30%, #e8f0f7 0%, #d9e8f5 60%, #c5dae9 100%);
     cursor: grab;
+    user-select: none;
   }
   #canvas-wrap.panning { cursor: grabbing; }
+  #canvas { user-select: none; }
   #canvas {
     position: relative;
     transform-origin: 0 0;
@@ -1705,18 +1707,31 @@ function hideDragInfo() { dragInfoEl.classList.remove('on'); }
 // PAN + RUBBER-BAND SELECTION
 // Dra på tom canvas → panorera vyn.
 // Håll Shift/Ctrl/Meta och dra → rubber-band-markering.
+// Pinch med två fingrar → zoom (hanteras av wheel-händelsen via iOS Safari scroll).
 // ====================================================================================
 let rubber = null;
 let pan    = null;
+let activePointerCount = 0;  // spårar antal nertryckta fingrar/pekare
 
 canvasWrap.addEventListener('pointerdown', (e) => {
   if (state.calibMode) return;
   if (e.target !== canvasWrap && e.target !== canvas && e.target !== kajEl && e.target !== bgImg && !e.target.classList.contains('place')) return;
 
+  activePointerCount++;
+
+  // Avbryt pan om ett andra finger trycks ned (pinch-to-zoom)
+  if (activePointerCount > 1) {
+    if (pan) {
+      pan = null;
+      canvasWrap.classList.remove('panning');
+    }
+    return;
+  }
+
   const isModifier = e.shiftKey || e.ctrlKey || e.metaKey;
 
   if (isModifier) {
-    // Rubber-band-markering med modifierare
+    // Rubber-band-markering
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) / state.zoom;
     const y = (e.clientY - rect.top) / state.zoom;
@@ -1725,7 +1740,11 @@ canvasWrap.addEventListener('pointerdown', (e) => {
     updateRubber();
   } else {
     // Pan
-    pan = { startX: e.clientX, startY: e.clientY, scrollLeft: canvasWrap.scrollLeft, scrollTop: canvasWrap.scrollTop, moved: false };
+    pan = {
+      startX: e.clientX, startY: e.clientY,
+      scrollLeft: canvasWrap.scrollLeft, scrollTop: canvasWrap.scrollTop,
+      moved: false
+    };
     canvasWrap.classList.add('panning');
   }
   canvasWrap.setPointerCapture(e.pointerId);
@@ -1748,15 +1767,18 @@ canvasWrap.addEventListener('pointermove', (e) => {
     renderBoats(); renderBoatList();
   }
   if (pan) {
+    e.preventDefault();
     const dx = e.clientX - pan.startX;
     const dy = e.clientY - pan.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) pan.moved = true;
-    canvasWrap.scrollLeft = pan.scrollLeft - dx;
-    canvasWrap.scrollTop  = pan.scrollTop  - dy;
+    // Skala rörelsehastigheten med zoom så att det känns naturligt
+    canvasWrap.scrollLeft = pan.scrollLeft - dx * state.zoom;
+    canvasWrap.scrollTop  = pan.scrollTop  - dy * state.zoom;
   }
 });
 
 canvasWrap.addEventListener('pointerup', () => {
+  activePointerCount = Math.max(0, activePointerCount - 1);
   if (rubber) {
     const b = rubberRect();
     const moved = b.w > 2 || b.h > 2;
@@ -1770,6 +1792,12 @@ canvasWrap.addEventListener('pointerup', () => {
     canvasWrap.classList.remove('panning');
     if (!moved) clearSelection();
   }
+});
+
+canvasWrap.addEventListener('pointercancel', () => {
+  activePointerCount = Math.max(0, activePointerCount - 1);
+  pan = null;
+  canvasWrap.classList.remove('panning');
 });
 function rubberRect() {
   return {
