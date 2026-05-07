@@ -234,7 +234,9 @@
     position: relative;
     background:
       radial-gradient(ellipse at 50% 30%, #e8f0f7 0%, #d9e8f5 60%, #c5dae9 100%);
+    cursor: grab;
   }
+  #canvas-wrap.panning { cursor: grabbing; }
   #canvas {
     position: relative;
     transform-origin: 0 0;
@@ -1700,43 +1702,74 @@ function showDragInfo(clientX, clientY, b, snapOn) {
 function hideDragInfo() { dragInfoEl.classList.remove('on'); }
 
 // ====================================================================================
-// RUBBER-BAND SELECTION
+// PAN + RUBBER-BAND SELECTION
+// Dra på tom canvas → panorera vyn.
+// Håll Shift/Ctrl/Meta och dra → rubber-band-markering.
 // ====================================================================================
 let rubber = null;
+let pan    = null;
+
 canvasWrap.addEventListener('pointerdown', (e) => {
   if (state.calibMode) return;
   if (e.target !== canvasWrap && e.target !== canvas && e.target !== kajEl && e.target !== bgImg && !e.target.classList.contains('place')) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / state.zoom;
-  const y = (e.clientY - rect.top) / state.zoom;
-  rubber = { x0: x, y0: y, x1: x, y1: y, shift: e.shiftKey || e.ctrlKey || e.metaKey, origIds: new Set(state.selectedIds) };
-  rubberEl.style.display = 'block';
-  updateRubber();
+
+  const isModifier = e.shiftKey || e.ctrlKey || e.metaKey;
+
+  if (isModifier) {
+    // Rubber-band-markering med modifierare
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / state.zoom;
+    const y = (e.clientY - rect.top) / state.zoom;
+    rubber = { x0: x, y0: y, x1: x, y1: y, origIds: new Set(state.selectedIds) };
+    rubberEl.style.display = 'block';
+    updateRubber();
+  } else {
+    // Pan
+    pan = { startX: e.clientX, startY: e.clientY, scrollLeft: canvasWrap.scrollLeft, scrollTop: canvasWrap.scrollTop, moved: false };
+    canvasWrap.classList.add('panning');
+  }
   canvasWrap.setPointerCapture(e.pointerId);
 });
+
 canvasWrap.addEventListener('pointermove', (e) => {
-  if (!rubber) return;
-  const rect = canvas.getBoundingClientRect();
-  rubber.x1 = (e.clientX - rect.left) / state.zoom;
-  rubber.y1 = (e.clientY - rect.top) / state.zoom;
-  updateRubber();
-  const sel = new Set(rubber.shift ? rubber.origIds : []);
-  const box = rubberRect();
-  for (const b of state.boats) {
-    const bCx = mxToCx(b.mx), bCy = myToCy(b.my);
-    const bW = b.lengthM * state.canvasScale, bH = b.widthM * state.canvasScale;
-    if (!(bCx + bW < box.x || bCx > box.x + box.w || bCy + bH < box.y || bCy > box.y + box.h)) sel.add(b.id);
+  if (rubber) {
+    const rect = canvas.getBoundingClientRect();
+    rubber.x1 = (e.clientX - rect.left) / state.zoom;
+    rubber.y1 = (e.clientY - rect.top) / state.zoom;
+    updateRubber();
+    const sel = new Set(rubber.origIds);
+    const box = rubberRect();
+    for (const b of state.boats) {
+      const bCx = mxToCx(b.mx), bCy = myToCy(b.my);
+      const bW = b.lengthM * state.canvasScale, bH = b.widthM * state.canvasScale;
+      if (!(bCx + bW < box.x || bCx > box.x + box.w || bCy + bH < box.y || bCy > box.y + box.h)) sel.add(b.id);
+    }
+    state.selectedIds = sel;
+    renderBoats(); renderBoatList();
   }
-  state.selectedIds = sel;
-  renderBoats(); renderBoatList();
+  if (pan) {
+    const dx = e.clientX - pan.startX;
+    const dy = e.clientY - pan.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) pan.moved = true;
+    canvasWrap.scrollLeft = pan.scrollLeft - dx;
+    canvasWrap.scrollTop  = pan.scrollTop  - dy;
+  }
 });
+
 canvasWrap.addEventListener('pointerup', () => {
-  if (!rubber) return;
-  const b = rubberRect();
-  const moved = b.w > 2 || b.h > 2;
-  rubber = null;
-  rubberEl.style.display = 'none';
-  if (!moved) clearSelection(); else refreshSelectionUI();
+  if (rubber) {
+    const b = rubberRect();
+    const moved = b.w > 2 || b.h > 2;
+    rubber = null;
+    rubberEl.style.display = 'none';
+    if (!moved) clearSelection(); else refreshSelectionUI();
+  }
+  if (pan) {
+    const moved = pan.moved;
+    pan = null;
+    canvasWrap.classList.remove('panning');
+    if (!moved) clearSelection();
+  }
 });
 function rubberRect() {
   return {
