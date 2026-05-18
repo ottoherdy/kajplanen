@@ -590,7 +590,7 @@
     .mob-toggle {
       display: flex !important;
       position: fixed;
-      top: 44px;
+      top: 40px;
       z-index: 101;
       background: var(--panel);
       border: 1px solid var(--border);
@@ -1378,7 +1378,6 @@ function updateCollisions() {
     if (p.type === 'overlap') d.appendChild(document.createTextNode(`${p.a.name} ↔ ${p.b.name}`));
     else if (p.type === 'leftEdge') d.appendChild(document.createTextNode(`${p.a.name} sticker ut (vänster)`));
     else if (p.type === 'rightEdge') d.appendChild(document.createTextNode(`${p.a.name} sticker ut (höger)`));
-    else if (p.type === 'fire') d.appendChild(document.createTextNode(`${p.a.name} blockerar ${p.fire.label||'brandgata'}`));
     d.onclick = () => { setSelection([p.a.id]); panToBoat(p.a); };
     list.appendChild(d);
   });
@@ -1477,7 +1476,7 @@ function renderFactCard(b) {
   html += `</div>`;
   if (yard) html += `<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px">Varv: ${escapeHtml(yard)}</div>`;
   if (story) html += `<div class="story">${escapeHtml(story)}</div>`;
-  if (sources.length) html += `<div class="sources">Källor: ${sources.map(s => `<a href="${s}" target="_blank" rel="noopener">länk</a>`).join(', ')}</div>`;
+  if (sources.length) html += `<div class="sources">Källor: ${sources.map(s => s.startsWith('https://') ? `<a href="${escapeHtml(s)}" target="_blank" rel="noopener noreferrer">länk</a>` : '').filter(Boolean).join(', ')}</div>`;
   card.innerHTML = html;
 }
 function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -1687,7 +1686,9 @@ canvasWrap.addEventListener('pointermove', (e) => {
       if (!(bCx + bW < box.x || bCx > box.x + box.w || bCy + bH < box.y || bCy > box.y + box.h)) sel.add(b.id);
     }
     state.selectedIds = sel;
-    renderBoats(); renderBoatList();
+    // Riktad klasstoggel under drag — full render sker vid pointerup
+    document.querySelectorAll('.boat').forEach(el =>
+      el.classList.toggle('selected', sel.has(el.dataset.id)));
   }
   if (pan) {
     e.preventDefault();
@@ -1695,8 +1696,8 @@ canvasWrap.addEventListener('pointermove', (e) => {
     const dy = e.clientY - pan.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) pan.moved = true;
     // Skala rörelsehastigheten med zoom så att det känns naturligt
-    canvasWrap.scrollLeft = pan.scrollLeft - dx * state.zoom;
-    canvasWrap.scrollTop  = pan.scrollTop  - dy * state.zoom;
+    canvasWrap.scrollLeft = pan.scrollLeft - dx;
+    canvasWrap.scrollTop  = pan.scrollTop  - dy;
   }
 });
 
@@ -1707,7 +1708,7 @@ canvasWrap.addEventListener('pointerup', () => {
     const moved = b.w > 2 || b.h > 2;
     rubber = null;
     rubberEl.style.display = 'none';
-    if (!moved) clearSelection(); else refreshSelectionUI();
+    if (!moved) clearSelection(); else { renderBoats(); renderBoatList(); refreshSelectionUI(); }
   }
   if (pan) {
     const moved = pan.moved;
@@ -1721,6 +1722,8 @@ canvasWrap.addEventListener('pointercancel', () => {
   activePointerCount = Math.max(0, activePointerCount - 1);
   pan = null;
   canvasWrap.classList.remove('panning');
+  rubber = null;
+  rubberEl.style.display = 'none';
 });
 function rubberRect() {
   return {
@@ -2551,6 +2554,11 @@ function loadFromHash() {
     const json = LZString.decompressFromEncodedURIComponent(h.slice(3));
     if (!json) return false;
     if (confirm('Ladda delad plan från länken? Ersätter nuvarande data.')) {
+      const parsed = JSON.parse(json);
+      // Minimal schema-check: förväntar sig ett objekt med boats-array
+      if (typeof parsed !== 'object' || parsed === null || !Array.isArray(parsed.boats)) {
+        alert('Ogiltig länk — kunde inte läsa planen.'); return false;
+      }
       restoreFromJson(json);
       return true;
     }
@@ -2803,6 +2811,11 @@ init();
   });
 
   overlay.addEventListener('click', closeAll);
+
+  // Stäng drawers om skärmen roteras till stående (media query aktiveras inte längre)
+  window.addEventListener('resize', () => {
+    if (window.innerHeight > 520) closeAll();
+  });
 })();
 
 </script>
