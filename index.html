@@ -614,6 +614,10 @@
     }
     #mob-overlay.on { display: block; }
 
+    /* Dölj ⌘K-hint på mobil */
+    #topbar .search-btn kbd { display: none; }
+    #topbar .search-btn { min-width: 60px; justify-content: center; }
+
     /* Bottenbar kompakt */
     #bottom-bar { padding: 0 6px; gap: 6px; font-size: 10.5px; }
     #bottom-bar .zoom input[type=range] { width: 70px; }
@@ -905,7 +909,7 @@
     <tbody id="places-tbody"></tbody>
   </table>
   <button id="places-add" style="margin-top:10px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer">＋ Ny plats</button>
-  <button id="places-auto" style="margin-left:6px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer" title="Skapa platser automatiskt från nuvarande båtars positioner">🪄 Auto från båtar</button>
+  <button id="places-auto" style="margin-left:6px; padding:6px 12px; border:1px solid var(--border); background:var(--panel); border-radius:4px; cursor:pointer" title="Skapa platser automatiskt från nuvarande båtars positioner">Auto från båtar</button>
   <div class="actions">
     <button class="primary" id="places-close">Klar</button>
   </div>
